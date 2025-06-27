@@ -8,6 +8,15 @@
 	"build": {
 		// Path is relataive to the devcontainer.json file.
 		"dockerfile": "Dockerfile.devcontainer"
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"fill-labs.dependi",
+				"rust-lang.rust-analyzer",
+				"tamasfe.even-better-toml"
+			]
+		}
 	}
 
 
