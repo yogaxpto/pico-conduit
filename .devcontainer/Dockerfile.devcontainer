@@ -1,3 +1,30 @@
-FROM mcr.microsoft.com/devcontainers/rust:0-1-bullseye
+# syntax=docker/dockerfile:1
+FROM rust:1-alpine
 
-RUN apt-get update && apt-get install -y libudev-dev
+RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
+    apk add \
+        git \
+        curl \
+        zsh \
+        musl-dev \
+        pkgconf \
+        eudev-dev \
+        libusb-dev \
+        openssl-dev \
+        build-base
+
+# Install oh-my-zsh
+RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+
+SHELL ["/bin/zsh", "-c"]
+ENV SHELL=/bin/zsh
+
+# Rust target for RP235x (Cortex-M33)
+RUN rustup target add thumbv8m.main-none-eabihf
+
+# Embedded tooling
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    cargo install probe-rs-tools --locked \
+    && cargo install flip-link --locked \
+    && cargo install elf2uf2-rs --locked

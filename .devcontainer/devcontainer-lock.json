@@ -1,0 +1,9 @@
+{
+  "features": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "version": "1.8.0",
+      "resolved": "ghcr.io/devcontainers/features/docker-outside-of-docker@sha256:7814faedf1aa581022e365d55bc0c8225f1aa9500c703c5585842f9a790a9701",
+      "integrity": "sha256:7814faedf1aa581022e365d55bc0c8225f1aa9500c703c5585842f9a790a9701"
+    }
+  }
+}
