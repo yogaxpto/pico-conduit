@@ -8,6 +8,36 @@ The device acts as a **network-controlled hardware bridge**: a remote client sen
 
 ---
 
+## Getting Started
+
+> All tools are pre-installed in the devcontainer. No host-side Rust or embedded toolchain setup is required.
+
+**1. Open the devcontainer**
+- VS Code: `Dev Containers: Reopen in Container` (Command Palette)
+- CLI: `devcontainer up --workspace-folder .`
+
+**2. Set development credentials (optional but recommended)**
+Copy `.env.example` to `.env` and fill in your local Wi-Fi SSID and password. These are injected at compile time (see Phase 6a) and skip flash storage during development:
+```sh
+cp .env.example .env
+# edit .env with your local AP credentials
+source .env
+```
+
+**3. Essential commands**
+| Task | Command |
+|------|---------|
+| Build firmware | `cargo build --release` |
+| Flash via probe-rs (SWD) | `probe-rs run --chip RP235x target/thumbv8m.main-none-eabihf/release/pico-socketeer` |
+| Flash via UF2 (bootloader) | `elf2uf2-rs target/thumbv8m.main-none-eabihf/release/pico-socketeer` |
+| Host unit + mock tests | `cargo test --target x86_64-unknown-linux-gnu` |
+| Lint | `cargo clippy --target thumbv8m.main-none-eabihf -- -D warnings` |
+| Format check | `cargo fmt --check` |
+
+Full contributor guide (branching, release process, code style) will be in `CONTRIBUTING.md` — see Phase 8b. Until it exists, the commands above cover day-to-day development.
+
+---
+
 ## Architecture Overview
 
 ```
@@ -96,7 +126,22 @@ The table below shows which phases must be completed (or stubbed) before a given
 | 7 — Testing | All implementation phases |
 | 8 — Packaging | 7 |
 
-**Suggested implementation order:** 1 → 6a (stub) → 2 → 3 → 4 → 5a → 5b → 5c → 6a (full) → 6b–6f → 7 → 8
+**Suggested implementation order:**
+
+> Follow this sequence to unblock each phase as early as possible. Stubs (marked below) are minimal placeholders sufficient to satisfy the dependency without full functionality.
+
+1. **Phase 1** — Toolchain & HAL foundation (including `.vscode/settings.json`, devcontainer update, minimal CI)
+2. **Phase 6a (stub)** — Flash storage stub returning `None` from `load_credentials()` — unblocks Phase 2
+3. **Phase 2** — Wi-Fi connectivity
+4. **Phase 3** — Message protocol
+5. **Phase 4** — Peripheral drivers & router
+6. **Phase 5a** — Async task model
+7. **Phase 5b** — LED signaling
+8. **Phase 5c** — Power management
+9. **Phase 6a (full)** — Complete flash storage implementation
+10. **Phases 6b–6f** — Provisioning, captive portal, factory reset
+11. **Phase 7** — Testing & validation
+12. **Phase 8** — Packaging, documentation, CI expansion
 
 ---
 
@@ -106,12 +151,21 @@ The table below shows which phases must be completed (or stubbed) before a given
 
 **Goal:** Get a working, buildable project that boots on the Pico 2.
 
+> **Start here:** Create `rust-toolchain.toml` before any other task. Without it, `cargo build` uses whatever Rust version the devcontainer happens to have, making the toolchain non-reproducible across environments and CI. All subsequent checklist items assume this file is in place.
+
 - [ ] Add `rust-toolchain.toml` at repo root pinning Rust stable channel, components (`rustfmt`, `clippy`, `rust-src`), and target (`thumbv8m.main-none-eabihf`); this file is read by rustup, the devcontainer, and CI to ensure all environments use an identical toolchain
 - [ ] Add `embassy-rp` (async runtime + HAL) and its required dependencies in `Cargo.toml`; **do not add `rp235x-hal`** — `embassy-rp` IS the HAL for embassy on RP2350 and the two HALs conflict
 - [ ] Configure the linker script (`memory.x`) for the RP235x's flash/RAM layout
 - [ ] Set correct build target (`thumbv8m.main-none-eabihf`) and `.cargo/config.toml` flags
 - [ ] Verify a `defmt`-based logging setup for debug output over RTT (probe-rs)
 - [ ] Boot to a stable idle loop; confirm via `probe-rs` or UF2 flash
+- [ ] Add `.vscode/settings.json` with `"rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf"` and `"rust-analyzer.cargo.features": []` — without this, rust-analyzer analyzes the crate as a host binary and floods the IDE with false `no_std` errors
+- [ ] Update `.devcontainer/devcontainer.json` with:
+  - `"postCreateCommand": "rustup show"` — verifies the pinned toolchain is installed on container start
+  - `"forwardPorts": [4242]` — exposes the TCP socket to the host for Tier 4 integration tests
+  - `"customizations": { "vscode": { "settings": { "rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf" } } }` — keeps rust-analyzer settings in one place alongside the extension list
+- [ ] Create a minimal `.github/workflows/ci.yml` with two jobs — `lint` (`cargo fmt --check`) and `build` (`cargo build --release --target thumbv8m.main-none-eabihf`) — triggered on `push` and `pull_request`; expand to the full three-job pipeline in Phase 8c
+- [ ] Expand `.gitignore` to also exclude `.env` (local credential overrides), `*.uf2` (build artefacts), and common editor/OS noise (`.DS_Store`, `*.swp`, `.idea/`)
 
 **Key crates:**
 - `embassy-rp` — async runtime, executor, and HAL for RP235x (provides all peripheral drivers; `rp235x-hal` is **not** used — the two HALs conflict)
@@ -397,6 +451,13 @@ Embassy's async executor calls `cortex_m::asm::wfi()` automatically whenever all
 - [ ] Implement `load_credentials() -> Option<Credentials>` — reads from the last flash sector(s) at boot
 - [ ] Implement `save_credentials(creds: &Credentials)` — called after a successful provisioning test
 - [ ] Compile-time override: if `PICO_WIFI_SSID` and `PICO_WIFI_PASS` env vars are set at build time, use them and skip flash storage (development convenience only)
+- [ ] Add `.env.example` at repo root with commented-out credential exports so developers know the exact variable names without reading this section:
+  ```sh
+  # Copy to .env, fill in your values, then run: source .env
+  # .env is gitignored — never commit it
+  # export PICO_WIFI_SSID="your-ssid"
+  # export PICO_WIFI_PASS="your-password"
+  ```
 
 #### 6b — AP / Provisioning Mode
 
@@ -448,6 +509,15 @@ Embassy's async executor calls `cortex_m::asm::wfi()` automatically whenever all
 ---
 
 ### Phase 7 — Testing & Validation
+
+> **Hardware prerequisites for Tier 3 & 4 tests:**
+> - Raspberry Pi Pico **2W** (not Pico 1 or plain Pico 2)
+> - Data-capable USB-A → micro-USB cable
+> - SWD debug probe (e.g. [Raspberry Pi Debug Probe](https://www.raspberrypi.com/products/debug-probe/) or a second Pico flashed as [Picoprobe](https://github.com/raspberrypi/picoprobe))
+> - Jumper wires (for UART TX→RX loopback and I2C pull-up resistors)
+> - A 2.4 GHz 802.11n access point the device can reach
+>
+> Tier 1 and Tier 2 tests run entirely on the host machine — no hardware or probe is needed.
 
 Testing is structured in four tiers, each runnable independently. A clean `cargo build` or `cargo build --release` **never** includes test code or mock peripherals — all test isolation is enforced by Rust's standard `#[cfg(test)]` and `[dev-dependencies]` mechanisms.
 
@@ -623,6 +693,13 @@ Located in `tests/integration/tcp_client.rs`. This binary is a standard Rust int
   - Release process (see 8c)
 - [ ] Add `rustfmt.toml` at repo root with `edition = "2024"` set explicitly; add a comment that all other settings are left at `rustfmt` defaults (prevents toolchain-version drift)
 - [ ] Add `#![deny(clippy::all)]` to `src/main.rs`; note in `CONTRIBUTING.md` that all future source files carry the same attribute at crate root
+- [ ] Add `CLAUDE.md` at repo root documenting project conventions for AI-assisted development (the devcontainer installs `Anthropic.claude-code`):
+  - **No heap:** `no_std` + `no alloc`; all buffers use `heapless` — never suggest `Vec`, `String`, `Box`, or `format!()`
+  - **Async runtime:** `embassy` executor only; never suggest `std::thread`, `tokio`, or `async-std`
+  - **Logging:** `defmt` macros (`info!`, `warn!`, `error!`) — never `println!` or `eprintln!`
+  - **Error codes:** all `"error"` values are `&'static str` — no heap allocation for error messages
+  - **Single HAL:** `embassy-rp` provides all peripheral access; never suggest `rp235x-hal` (the two conflict)
+  - **Commit style:** imperative mood, ≤ 72 characters, no period at end (e.g. `Add GPIO read support`)
 
 #### 8c — GitHub Project Health
 
@@ -695,10 +772,15 @@ pico-socketeer/
 ├── Cargo.toml           # Workspace manifest after Phase 8 conversion (members = [".", "client"])
 ├── rust-toolchain.toml  # Pins Rust stable channel, rustfmt/clippy/rust-src, thumbv8m target (Phase 1)
 ├── rustfmt.toml         # edition = "2024"; all other settings at rustfmt defaults (Phase 8b)
+├── CLAUDE.md            # AI coding assistant conventions: no-heap, embassy, defmt, error codes (Phase 8b)
+├── .env.example         # Documents PICO_WIFI_SSID / PICO_WIFI_PASS compile-time overrides (Phase 6a)
 ├── client/              # pico-socketeer-client workspace crate (Phase 8)
 │   ├── Cargo.toml
 │   └── src/
 │       └── lib.rs       # Reference client library; published to crates.io at v1.0
+├── .vscode/
+│   ├── launch.json      # LLDB debug configuration
+│   └── settings.json    # rust-analyzer target + features override for embedded (Phase 1)
 ├── OBJECTIVE.md         # This file
 ├── PROTOCOL.md          # Wire protocol reference (Phase 8)
 ├── LED_STATUS.md        # LED blink-code reference for end users (Phase 8)
@@ -715,7 +797,7 @@ pico-socketeer/
 └── .github/
     ├── dependabot.yml
     ├── workflows/
-    │   └── ci.yml       # lint → build → release → wiki jobs; PR + tag triggers (Phase 8c/8d)
+    │   └── ci.yml       # Phase 1: minimal lint + build; expanded to lint → build → release → wiki in Phase 8c/8d
     ├── ISSUE_TEMPLATE/
     │   ├── bug_report.md
     │   └── feature_request.md
