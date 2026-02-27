@@ -153,10 +153,23 @@ The table below shows which phases must be completed (or stubbed) before a given
 
 > **Start here:** Create `rust-toolchain.toml` before any other task. Without it, `cargo build` uses whatever Rust version the devcontainer happens to have, making the toolchain non-reproducible across environments and CI. All subsequent checklist items assume this file is in place.
 
+> **Scaffold replacement note:** The current scaffold (`src/main.rs`, `Cargo.toml`) uses `cortex-m-rt`'s `#[entry]` macro and `panic-halt`. These are **incompatible** with Embassy and must be replaced wholesale — not extended. Specifically: remove `cortex-m`, `cortex-m-rt`, and `panic-halt` from `[dependencies]`; replace `#[entry]` with `#[embassy_executor::main]`; add `panic-probe`. Embassy manages `cortex-m`/`cortex-m-rt` as transitive dependencies — do not re-add them as direct dependencies.
+
 - [ ] Add `rust-toolchain.toml` at repo root pinning Rust stable channel, components (`rustfmt`, `clippy`, `rust-src`), and target (`thumbv8m.main-none-eabihf`); this file is read by rustup, the devcontainer, and CI to ensure all environments use an identical toolchain
-- [ ] Add `embassy-rp` (async runtime + HAL) and its required dependencies in `Cargo.toml`; **do not add `rp235x-hal`** — `embassy-rp` IS the HAL for embassy on RP2350 and the two HALs conflict
+- [ ] Add `embassy-rp` (async runtime + HAL) and its required dependencies in `Cargo.toml`; **do not add `rp235x-hal`** — `embassy-rp` IS the HAL for embassy on RP2350 and the two HALs conflict; also remove the scaffold's `cortex-m`, `cortex-m-rt`, and `panic-halt` entries and replace with `panic-probe`
 - [ ] Configure the linker script (`memory.x`) for the RP235x's flash/RAM layout
-- [ ] Set correct build target (`thumbv8m.main-none-eabihf`) and `.cargo/config.toml` flags
+- [ ] Add the following to `.cargo/config.toml` under a `[target.thumbv8m.main-none-eabihf]` section:
+  - `rustflags = ["-C", "link-arg=-Tlink.x", "-C", "link-arg=--nmagic"]` — required for `memory.x` to be found by the linker; without `-Tlink.x` the binary will fail to link
+  - `linker = "flip-link"` — stack overflow detection via the pre-installed `flip-link` tool; `flip-link` flips the RAM layout so a stack overflow crashes into an unmapped region rather than silently corrupting BSS/statics
+  - `runner = "probe-rs run --chip RP235x"` — enables `cargo run` and `cargo test --target thumbv8m.main-none-eabihf` to flash and run via probe-rs automatically (see Phase 7 Tier 3)
+- [ ] Add a `[profile.release]` section to `Cargo.toml`:
+  ```toml
+  [profile.release]
+  opt-level = "s"      # optimise for binary size
+  lto = true           # link-time optimisation; reduces firmware size significantly
+  codegen-units = 1    # required for LTO; disables parallel codegen
+  debug = true         # retain symbols so probe-rs / defmt can decode RTT log messages
+  ```
 - [ ] Verify a `defmt`-based logging setup for debug output over RTT (probe-rs)
 - [ ] Boot to a stable idle loop; confirm via `probe-rs` or UF2 flash
 - [ ] Add `.vscode/settings.json` with `"rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf"` and `"rust-analyzer.cargo.features": []` — without this, rust-analyzer analyzes the crate as a host binary and floods the IDE with false `no_std` errors
@@ -533,6 +546,8 @@ cargo test --target x86_64-unknown-linux-gnu
 - All test modules are gated with `#[cfg(test)]` and excluded from firmware builds
 - No `no_std` constraint in test context — host tests use `std`
 
+> **Test placement rule:** Rust files under `tests/` are *integration tests* — they compile as separate crates and can only access `pub` API. Tests that exercise private or `pub(crate)` implementation details (parsers, serializers, internal state machines) **must** live as `#[cfg(test)]` modules inside the relevant source file (`protocol.rs`, `led.rs`, `provisioning/storage.rs`, `provisioning/portal.rs`). Only use `tests/host/` for integration-style host tests that exercise the module's public surface. This distinction applies to all Tier 1 and Tier 2 test items below.
+
 - [ ] Write `#[test]` cases for `Command` / `Response` serialization and deserialization
 - [ ] Write `#[test]` cases for framing edge cases (partial reads, oversized messages, malformed JSON)
 - [ ] Write `#[test]` cases for router dispatch (correct handler called for each `interface` value)
@@ -764,7 +779,7 @@ pico-socketeer/
 │       └── usb.rs
 ├── tests/
 │   ├── host/
-│   │   └── protocol_tests.rs   # Tier 1 & 2: host unit + mock tests (cargo test --target x86_64)
+│   │   └── protocol_tests.rs   # Tier 1 & 2: integration-style host tests (public API only); private-item unit tests live as #[cfg(test)] modules inside each source file
 │   └── integration/
 │       └── tcp_client.rs       # Tier 4: TCP integration test (PICO_IP=... cargo test --test integration)
 ├── memory.x             # Linker script for RP235x
@@ -817,6 +832,9 @@ pico-socketeer/
 - Multi-device mesh networking
 - A general-purpose web UI or REST API (TCP sockets only in v1) — **except** the one-time provisioning captive portal, which is a lightweight HTTP/1.0 server active only when no credentials are stored in flash
 - RP2350 SLEEP or DORMANT low-power modes — incompatible with an always-on TCP socket server; no Wi-Fi-frame wakeup source exists from either mode (planned for a v2 scheduled-wake variant where the device wakes periodically to handle requests)
+- Bluetooth (BLE or Classic) — the CYW43439 chip supports Bluetooth 5.2 (LE Central/Peripheral + Classic), but the `cyw43` Rust driver's BT stack path is less mature than its Wi-Fi path and is out of scope for v1; planned for consideration in v2
+- PIO (Programmable I/O) — RP2350 has 3 PIO blocks / 12 state machines capable of emulating custom serial protocols, WS2812 LEDs, SD card, VGA, and more; PIO programs are inherently use-case-specific and incompatible with a generic peripheral bridge interface; planned for consideration in a future specialist variant
+- HSTX peripheral — the RP2350 HSTX high-speed serial transmit block (designed for DVI/HDMI output and similar streaming use cases) is not relevant to the network-bridge goal and is excluded from v1
 
 ---
 
@@ -826,6 +844,7 @@ pico-socketeer/
 |------------|--------|
 | No heap | `no_std` + `no alloc`; all buffers are statically sized with `heapless` |
 | Single core | RP235x is dual Cortex-M33; v1 uses core 0 only via `embassy` |
+| Core architecture | Cortex-M33 (`thumbv8m.main-none-eabihf`); RP2350 also offers dual RISC-V Hazard3 cores, but `embassy-rp` does not yet support the RISC-V RP2350 target — Cortex-M33 is the only viable choice for this firmware |
 | Flash size | 4 MB on Pico 2; CYW43 firmware blob is ~230 KB |
 | RAM | 520 KB SRAM; message buffers must be conservatively sized |
 | Async only | All I/O is non-blocking via `embassy`; no RTOS threads |
