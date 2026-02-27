@@ -1,0 +1,98 @@
+name: CI
+on:
+  push:
+  pull_request:
+    branches: [master]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - name: Install embedded target
+        run: rustup target add thumbv8m.main-none-eabihf
+
+      - name: Format check
+        run: cargo fmt --check
+
+      - name: Clippy (embedded target)
+        run: |
+          pip install flip-link 2>/dev/null || cargo install flip-link --locked
+          cargo clippy --target thumbv8m.main-none-eabihf -- -D warnings
+
+  build-and-test:
+    name: Build & Test
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - name: Install embedded target
+        run: rustup target add thumbv8m.main-none-eabihf
+
+      - name: Install flip-link
+        run: cargo install flip-link --locked
+
+      - name: Download CYW43 firmware blobs
+        run: |
+          mkdir -p cyw43-firmware
+          BASE=https://raw.githubusercontent.com/embassy-rs/embassy/main/cyw43-firmware
+          curl -fsSL "$BASE/43439A0.bin"     -o cyw43-firmware/43439A0.bin
+          curl -fsSL "$BASE/43439A0_clm.bin" -o cyw43-firmware/43439A0_clm.bin
+
+      - name: Build firmware (release)
+        run: cargo build --release --target thumbv8m.main-none-eabihf
+
+      - name: Host tests (Tier 1 + 2)
+        # Runs against the host triple — no --target flag needed.
+        # Tier 3/4 tests require physical hardware; run manually before tagging.
+        run: cargo test
+
+  release:
+    name: Release UF2
+    needs: build-and-test
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: rustup show
+
+      - name: Install embedded target
+        run: rustup target add thumbv8m.main-none-eabihf
+
+      - name: Install flip-link
+        run: cargo install flip-link --locked
+
+      - name: Install elf2uf2-rs
+        run: cargo install elf2uf2-rs --locked
+
+      - name: Download CYW43 firmware blobs
+        run: |
+          mkdir -p cyw43-firmware
+          BASE=https://raw.githubusercontent.com/embassy-rs/embassy/main/cyw43-firmware
+          curl -fsSL "$BASE/43439A0.bin"     -o cyw43-firmware/43439A0.bin
+          curl -fsSL "$BASE/43439A0_clm.bin" -o cyw43-firmware/43439A0_clm.bin
+
+      - name: Build firmware (release)
+        run: cargo build --release --target thumbv8m.main-none-eabihf
+
+      - name: Convert to UF2
+        run: elf2uf2-rs target/thumbv8m.main-none-eabihf/release/pico-socketeer pico-socketeer.uf2
+
+      - name: Upload UF2 to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: pico-socketeer.uf2

@@ -1,2 +1,15 @@
 [build]
 target = "thumbv8m.main-none-eabihf"
+
+[target.thumbv8m.main-none-eabihf]
+linker  = "flip-link"
+runner  = "probe-rs run --chip RP235x"
+rustflags = [
+    "-C", "link-arg=-Tlink.x",
+    "-C", "link-arg=--nmagic",
+    "-C", "link-arg=-Tdefmt.x",
+]
+
+[env]
+# DEFMT_LOG controls log level; override with DEFMT_LOG=debug for verbose output
+DEFMT_LOG = "info"

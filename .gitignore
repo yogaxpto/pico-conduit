@@ -1,1 +1,6 @@
 /target
+.env
+*.uf2
+.DS_Store
+*.swp
+.idea/
