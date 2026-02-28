@@ -4,3 +4,4 @@ mod portal_tests;
 mod protocol_tests;
 mod router_tests;
 mod storage_tests;
+mod system_tests;

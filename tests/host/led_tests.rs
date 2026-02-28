@@ -1,9 +1,9 @@
 use pico_socketeer::led::{LedState, SOS_TIMING};
 
-/// LedState must have exactly 8 variants — one for each row in the Phase 5b reference table.
+/// LedState must have exactly 9 variants — one for each row in the LED State Reference table.
 /// This test prevents silent omissions when the table is updated.
 #[test]
-fn led_state_has_eight_variants() {
+fn led_state_has_nine_variants() {
     // Exhaustive match — compile error if any variant is missing or extra
     let count = [
         LedState::Booting,
@@ -14,16 +14,17 @@ fn led_state_has_eight_variants() {
         LedState::Reconnecting,
         LedState::Error,
         LedState::Saving,
+        LedState::Rebooting,
     ]
     .len();
-    assert_eq!(count, 8, "LedState must have exactly 8 variants");
+    assert_eq!(count, 9, "LedState must have exactly 9 variants");
 }
 
 /// Exhaustive match to ensure the compiler catches any missing variants.
 #[test]
 fn led_state_variants_exhaustive_match() {
     let state = LedState::Booting;
-    // This match must compile — it covers all 8 variants
+    // This match must compile — it covers all 9 variants
     let _: &str = match state {
         LedState::Booting => "booting",
         LedState::Provisioning => "provisioning",
@@ -33,6 +34,7 @@ fn led_state_variants_exhaustive_match() {
         LedState::Reconnecting => "reconnecting",
         LedState::Error => "error",
         LedState::Saving => "saving",
+        LedState::Rebooting => "rebooting",
     };
 }
 
