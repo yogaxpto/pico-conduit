@@ -94,6 +94,6 @@ jobs:
         run: elf2uf2-rs target/thumbv8m.main-none-eabihf/release/pico-socketeer pico-socketeer.uf2
 
       - name: Upload UF2 to GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: pico-socketeer.uf2
