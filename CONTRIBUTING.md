@@ -23,7 +23,7 @@ cargo build --release --target thumbv8m.main-none-eabihf
 cargo run --release --target thumbv8m.main-none-eabihf
 
 # Host unit + mock hardware tests (Tier 1 + 2, no hardware needed)
-cargo test
+cargo test --test host --no-default-features --target aarch64-unknown-linux-musl
 
 # Format check
 cargo fmt --check
@@ -45,14 +45,15 @@ cargo clippy --target thumbv8m.main-none-eabihf -- -D warnings
 - **`no_std` purity:** `src/lib.rs` modules must compile on both the embedded target and
   the host test runner. Embedded-only code lives in `src/net.rs` (guarded by
   `[target.'cfg(target_os = "none")'.dependencies]` in `Cargo.toml`).
-- **Test placement:** in-file `#[cfg(test)]` modules for private logic; `tests/host/` for
-  public API integration tests.
+- **Test placement:** `tests/host/` for Tier 1 & 2 public API tests (run with
+  `cargo test --test host`); `tests/integration/` for Tier 4 TCP tests (require hardware,
+  all `#[ignore]`).
 
 ## Branching Workflow
 
 1. Fork the repository and create a branch: `git checkout -b feat/short-description`
 2. Keep commits small and focused; write imperative-mood commit messages.
-3. Ensure `cargo test` and `cargo clippy` pass before opening a PR.
+3. Ensure `cargo test --test host --no-default-features --target aarch64-unknown-linux-musl` and `cargo clippy` pass before opening a PR.
 4. Open a pull request against `master` and fill in the PR template.
 
 ## Adding a New Peripheral Interface
@@ -60,8 +61,18 @@ cargo clippy --target thumbv8m.main-none-eabihf -- -D warnings
 1. Create `src/interfaces/<name>.rs` following the pattern of an existing interface.
 2. Add a `pub mod <name>;` line in `src/interfaces/mod.rs`.
 3. Add the interface name and its valid actions to the match table in `src/router.rs`.
-4. Add `#[cfg(test)]` tests using `embedded-hal-mock` in the new file.
-5. Update `PROTOCOL.md` with the interface spec.
+4. Add tests in `tests/host/interfaces/<name>.rs` using `embedded-hal-mock`.
+5. Add `mod <name>;` to `tests/host/interfaces/mod.rs`.
+6. Update `PROTOCOL.md` with the interface spec.
+
+## Release Process
+
+1. Move `[Unreleased]` entries to a new versioned section in `CHANGELOG.md`.
+2. Bump `version` in `Cargo.toml` (root package).
+3. Run Tier 1 & 2 tests locally: `cargo test --test host --no-default-features --target aarch64-unknown-linux-musl`
+4. Run Tier 3 & 4 tests manually on hardware.
+5. Push the `vx.y.z` tag to trigger the CI `release` job, which produces `pico-socketeer.uf2`.
+6. Copy the CHANGELOG section into the GitHub Release description.
 
 ## Commit Message Format
 
