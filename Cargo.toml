@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "client"]
+members = [".", "client", "macros"]
 resolver = "2"
 
 [package]
@@ -105,6 +105,11 @@ cortex-m-rt = "0.7"
 embedded-hal-mock = { version = "0.11.1", features = ["embedded-hal-async", "eh1"] }
 # heapless is a [dependencies] entry but tests in tests/ are separate crates; re-declare here
 heapless = { version = "0.9.2", features = ["serde"] }
+# JSON construction/parsing for Tier 4 integration tests
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+# Proc-macro test helpers (e.g. #[require_env("PICO_IP")])
+pico-socketeer-macros = { path = "macros" }
 
 [[test]]
 name = "host"

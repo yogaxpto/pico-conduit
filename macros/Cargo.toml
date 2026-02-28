@@ -1,0 +1,13 @@
+[package]
+name    = "pico-socketeer-macros"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Proc-macro helpers for pico-socketeer tests"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1"
+syn   = { version = "2", features = ["full"] }

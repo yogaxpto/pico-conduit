@@ -1197,10 +1197,12 @@ dependencies = [
  "embedded-storage",
  "heapless 0.9.2",
  "panic-probe",
+ "pico-socketeer-macros",
  "portable-atomic",
  "sequential-storage",
  "serde",
  "serde-json-core",
+ "serde_json",
  "static_cell",
 ]
 
@@ -1210,6 +1212,14 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "pico-socketeer-macros"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn 2.0.117",
 ]
 
 [[package]]
