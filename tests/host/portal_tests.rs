@@ -1,5 +1,5 @@
 use pico_socketeer::provisioning::portal::{
-    Method, ParseError, decode_url_encoded, parse_connect_form, parse_request_line,
+    Method, ParseError, decode_url_encoded, make_ap_ssid, parse_connect_form, parse_request_line,
 };
 
 // ----- Request line parsing -----
@@ -238,4 +238,33 @@ fn parse_request_line_no_trailing_newline() {
     let req = parse_request_line(line).unwrap();
     assert_eq!(req.method, Method::Get);
     assert_eq!(req.path, "/");
+}
+
+// ----- MAC-to-SSID formatting -----
+
+#[test]
+fn make_ap_ssid_standard() {
+    let ssid = make_ap_ssid([0xAA, 0xBB, 0xCC, 0xDD, 0xA3, 0xF2]);
+    assert_eq!(ssid.as_str(), "pico-setup-A3F2");
+}
+
+#[test]
+fn make_ap_ssid_all_zeros() {
+    let ssid = make_ap_ssid([0x00; 6]);
+    assert_eq!(ssid.as_str(), "pico-setup-0000");
+}
+
+#[test]
+fn make_ap_ssid_uses_last_two_bytes() {
+    // Only the last two bytes of the MAC matter
+    let ssid = make_ap_ssid([0xFF, 0xFF, 0xFF, 0xFF, 0xDE, 0xAD]);
+    assert_eq!(ssid.as_str(), "pico-setup-DEAD");
+}
+
+#[test]
+fn make_ap_ssid_length_fits_in_20() {
+    // "pico-setup-XXXX" = 15 chars, well within heapless::String<20>
+    let ssid = make_ap_ssid([0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC]);
+    assert_eq!(ssid.len(), 15);
+    assert!(ssid.as_str().starts_with("pico-setup-"));
 }

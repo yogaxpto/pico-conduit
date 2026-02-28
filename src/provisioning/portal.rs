@@ -1,4 +1,4 @@
-//! HTTP captive portal — request parsing for the provisioning server.
+//! HTTP captive portal — request parsing and SSID helpers for the provisioning server.
 //!
 //! The portal runs on port 80 while the device is in AP mode. It serves:
 //! - `GET /`            — SSID scan results + HTML form
@@ -153,6 +153,25 @@ pub fn decode_url_encoded<'a>(
     }
 
     core::str::from_utf8(&out[..out_pos]).map_err(|_| ParseError::MalformedFormBody)
+}
+
+/// Build the Wi-Fi AP SSID from a 6-byte MAC address.
+///
+/// Result format: `"pico-setup-XXXX"` where `XXXX` are the last 4 hex digits of the MAC.
+/// Stored in a `heapless::String<20>`.
+///
+/// # Example
+///
+/// ```rust
+/// # use pico_socketeer::provisioning::portal::make_ap_ssid;
+/// let ssid = make_ap_ssid([0xAA, 0xBB, 0xCC, 0xDD, 0xA3, 0xF2]);
+/// assert_eq!(ssid.as_str(), "pico-setup-A3F2");
+/// ```
+pub fn make_ap_ssid(mac: [u8; 6]) -> heapless::String<20> {
+    use core::fmt::Write as _;
+    let mut ssid: heapless::String<20> = heapless::String::new();
+    let _ = write!(ssid, "pico-setup-{:02X}{:02X}", mac[4], mac[5]);
+    ssid
 }
 
 fn hex_nibble(b: u8) -> Result<u8, ParseError> {
