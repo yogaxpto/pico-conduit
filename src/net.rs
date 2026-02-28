@@ -21,7 +21,7 @@ use static_cell::StaticCell;
 use pico_socketeer::led::{LedState, SOS_TIMING};
 use pico_socketeer::protocol::{FrameReader, MAX_MSG_LEN, parse_command, serialize_response};
 use pico_socketeer::provisioning::storage::load_credentials;
-use pico_socketeer::router::validate_route;
+use pico_socketeer::router::{DeviceState, dispatch, validate_route};
 
 // ---- CYW43 firmware blobs ----
 const CYW43_FW: &[u8] = include_bytes!("../cyw43-firmware/43439A0.bin");
@@ -309,6 +309,7 @@ async fn handle_client(socket: &mut TcpSocket<'_>) {
     let mut frame_reader = FrameReader::new();
     let mut resp_buf = [0u8; MAX_MSG_LEN];
     let mut byte_buf = [0u8; 1];
+    let mut device_state = DeviceState::default();
 
     loop {
         let read_result = with_timeout(TCP_READ_TIMEOUT, socket.read(&mut byte_buf)).await;
@@ -340,10 +341,7 @@ async fn handle_client(socket: &mut TcpSocket<'_>) {
                 Err(err_code) => pico_socketeer::protocol::Response::error("", err_code),
                 Ok(cmd) => match validate_route(&cmd) {
                     Err(r) => r,
-                    Ok(_route) => {
-                        // TODO Phase 5a: full dispatch to interface handlers
-                        pico_socketeer::protocol::Response::ok(cmd.id, None)
-                    }
+                    Ok(route) => dispatch(&cmd, route, &mut device_state),
                 },
             }),
         };
