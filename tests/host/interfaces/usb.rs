@@ -1,6 +1,6 @@
 use pico_socketeer::interfaces::usb::{handle_read_with_data, handle_write};
 use pico_socketeer::protocol::{
-    Command, ResponseData, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED,
+    Command, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_VALUE_OUT_OF_RANGE, ResponseData,
 };
 
 fn make_usb_cmd<'a>(id: &'a str, action: &'a str) -> Command<'a> {
@@ -93,4 +93,39 @@ fn usb_read_missing_len_returns_missing_field() {
     let resp = handle_read_with_data(&cmd, true, &[0x00]);
     assert!(!resp.ok);
     assert_eq!(resp.error, Some(ERROR_MISSING_FIELD));
+}
+
+// ----- USB validation edge cases -----
+
+#[test]
+fn usb_read_len_zero_returns_error() {
+    let mut cmd = make_usb_cmd("ec1", "read");
+    cmd.len = Some(0);
+    let resp = handle_read_with_data(&cmd, true, &[0x00]);
+    assert!(!resp.ok);
+    assert_eq!(resp.error, Some(ERROR_VALUE_OUT_OF_RANGE));
+}
+
+#[test]
+fn usb_write_empty_bytes_returns_missing_field() {
+    let mut cmd = make_usb_cmd("ec2", "write");
+    cmd.bytes = Some(heapless::Vec::new()); // empty
+    let resp = handle_write(&cmd, true);
+    assert!(!resp.ok);
+    assert_eq!(resp.error, Some(ERROR_MISSING_FIELD));
+}
+
+#[test]
+fn usb_read_caps_at_64_bytes() {
+    let mut cmd = make_usb_cmd("ec3", "read");
+    cmd.len = Some(100);
+    let data = [0xCC; 80]; // more than 64 available
+    let resp = handle_read_with_data(&cmd, true, &data);
+    assert!(resp.ok);
+    match resp.data {
+        Some(ResponseData::Bytes { bytes }) => {
+            assert_eq!(bytes.len(), 64, "read should be capped at 64 bytes");
+        }
+        _ => panic!("expected Bytes response"),
+    }
 }

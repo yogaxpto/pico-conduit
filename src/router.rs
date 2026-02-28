@@ -4,9 +4,7 @@
 //! for unknown values. Each interface handler is responsible for further validation of its
 //! own required parameters.
 
-use crate::protocol::{
-    Command, Response, ERROR_UNKNOWN_ACTION, ERROR_UNKNOWN_INTERFACE,
-};
+use crate::protocol::{Command, ERROR_UNKNOWN_ACTION, ERROR_UNKNOWN_INTERFACE, Response};
 
 /// Dispatch a command to the appropriate interface handler.
 ///

@@ -2,10 +2,15 @@ use pico_socketeer::interfaces::i2c::{
     handle_configure, handle_read, handle_write, handle_write_read,
 };
 use pico_socketeer::protocol::{
-    Command, ResponseData, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_VALUE_OUT_OF_RANGE,
+    Command, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_VALUE_OUT_OF_RANGE, ResponseData,
 };
 
-fn make_i2c_cmd<'a>(id: &'a str, action: &'a str, i2c: Option<u8>, addr: Option<u8>) -> Command<'a> {
+fn make_i2c_cmd<'a>(
+    id: &'a str,
+    action: &'a str,
+    i2c: Option<u8>,
+    addr: Option<u8>,
+) -> Command<'a> {
     Command {
         version: Some(1),
         id,
@@ -155,4 +160,59 @@ fn i2c_write_read_missing_write_bytes() {
     let resp = handle_write_read(&cmd, true, &[0x00]);
     assert!(!resp.ok);
     assert_eq!(resp.error, Some(ERROR_MISSING_FIELD));
+}
+
+// ----- I2C validation edge cases -----
+
+#[test]
+fn i2c_configure_freq_zero_returns_error() {
+    let mut cmd = make_i2c_cmd("ec1", "configure", Some(0), None);
+    cmd.freq_hz = Some(0);
+    let err = handle_configure(&cmd).unwrap_err();
+    assert_eq!(err.error, Some(ERROR_VALUE_OUT_OF_RANGE));
+}
+
+#[test]
+fn i2c_write_empty_bytes_returns_missing_field() {
+    let mut cmd = make_i2c_cmd("ec2", "write", Some(0), Some(0x20));
+    cmd.bytes = Some(heapless::Vec::new()); // empty
+    let resp = handle_write(&cmd, true);
+    assert!(!resp.ok);
+    assert_eq!(resp.error, Some(ERROR_MISSING_FIELD));
+}
+
+#[test]
+fn i2c_read_len_zero_returns_error() {
+    let mut cmd = make_i2c_cmd("ec3", "read", Some(0), Some(0x48));
+    cmd.len = Some(0);
+    let resp = handle_read(&cmd, true, &[0x00]);
+    assert!(!resp.ok);
+    assert_eq!(resp.error, Some(ERROR_VALUE_OUT_OF_RANGE));
+}
+
+#[test]
+fn i2c_write_read_read_len_zero_returns_error() {
+    let mut cmd = make_i2c_cmd("ec4", "write_read", Some(0), Some(0x68));
+    let mut wb = heapless::Vec::new();
+    wb.push(0x00).ok();
+    cmd.write_bytes = Some(wb);
+    cmd.read_len = Some(0);
+    let resp = handle_write_read(&cmd, true, &[0x00]);
+    assert!(!resp.ok);
+    assert_eq!(resp.error, Some(ERROR_VALUE_OUT_OF_RANGE));
+}
+
+#[test]
+fn i2c_read_caps_at_64_bytes() {
+    let mut cmd = make_i2c_cmd("ec5", "read", Some(0), Some(0x48));
+    cmd.len = Some(100);
+    let data = [0xBB; 80]; // more than 64 available
+    let resp = handle_read(&cmd, true, &data);
+    assert!(resp.ok);
+    match resp.data {
+        Some(ResponseData::Bytes { bytes }) => {
+            assert_eq!(bytes.len(), 64, "read should be capped at 64 bytes");
+        }
+        _ => panic!("expected Bytes response"),
+    }
 }

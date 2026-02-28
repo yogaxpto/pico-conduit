@@ -11,8 +11,8 @@
 
 #![no_std]
 
+pub mod interfaces;
 pub mod led;
 pub mod protocol;
-pub mod router;
 pub mod provisioning;
-pub mod interfaces;
+pub mod router;

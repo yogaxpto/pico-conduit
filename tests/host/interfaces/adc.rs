@@ -1,7 +1,7 @@
 use pico_socketeer::interfaces::adc::{
     handle_read_with_raw, raw_to_celsius, raw_to_voltage, validate_read,
 };
-use pico_socketeer::protocol::{AdcChannel, Command, ResponseData, ERROR_MISSING_FIELD};
+use pico_socketeer::protocol::{AdcChannel, Command, ERROR_MISSING_FIELD, ResponseData};
 
 fn make_adc_cmd<'a>(id: &'a str, channel: Option<AdcChannel>) -> Command<'a> {
     Command {
@@ -43,7 +43,10 @@ fn adc_channel_0_returns_raw_and_voltage() {
         Some(ResponseData::AdcRead { raw, voltage }) => {
             assert_eq!(raw, 2048);
             // voltage ≈ (2048/4095) * 3.3 ≈ 1.650
-            assert!((voltage - 1.650).abs() < 0.01, "voltage should be ~1.65: {voltage}");
+            assert!(
+                (voltage - 1.650).abs() < 0.01,
+                "voltage should be ~1.65: {voltage}"
+            );
         }
         _ => panic!("expected AdcRead data, got {:?}", resp.data),
     }
@@ -71,7 +74,10 @@ fn adc_channel_2_full_scale() {
     match resp.data {
         Some(ResponseData::AdcRead { raw, voltage }) => {
             assert_eq!(raw, 4095);
-            assert!((voltage - 3.3).abs() < 0.001, "full scale voltage should be ~3.3V");
+            assert!(
+                (voltage - 3.3).abs() < 0.001,
+                "full scale voltage should be ~3.3V"
+            );
         }
         _ => panic!("expected AdcRead"),
     }
@@ -86,7 +92,10 @@ fn adc_temp_returns_celsius() {
     match resp.data {
         Some(ResponseData::AdcTemp { celsius }) => {
             // Just verify it's a plausible temperature
-            assert!(celsius > -40.0 && celsius < 85.0, "temperature out of range: {celsius}");
+            assert!(
+                celsius > -40.0 && celsius < 85.0,
+                "temperature out of range: {celsius}"
+            );
         }
         _ => panic!("expected AdcTemp data, got {:?}", resp.data),
     }
@@ -143,5 +152,43 @@ fn raw_to_celsius_reasonable_room_temp() {
     // Verify the formula gives a reasonable room temperature
     // At 27°C: voltage = 0.706 (from datasheet) → raw ≈ 876
     let temp = raw_to_celsius(876);
-    assert!(temp > 20.0 && temp < 35.0, "room temp should be 20-35°C: {temp}");
+    assert!(
+        temp > 20.0 && temp < 35.0,
+        "room temp should be 20-35°C: {temp}"
+    );
+}
+
+// ----- ADC conversion boundary edge cases -----
+
+#[test]
+fn raw_to_voltage_single_lsb() {
+    // raw=1: voltage = (1/4095) * 3.3 ≈ 0.000806
+    let v = raw_to_voltage(1);
+    let expected = 3.3 / 4095.0;
+    assert!(
+        (v - expected).abs() < 0.0001,
+        "single LSB voltage should be ~{expected}: {v}"
+    );
+}
+
+#[test]
+fn raw_to_celsius_zero_raw() {
+    // raw=0 → voltage=0.0 → celsius = 27 - (0 - 0.706) / 0.001721 ≈ 27 + 410 = ~437
+    // Very high temperature (unrealistic, but mathematically correct)
+    let temp = raw_to_celsius(0);
+    assert!(
+        temp > 400.0,
+        "raw=0 should give very high celsius (voltage=0 << 0.706): {temp}"
+    );
+}
+
+#[test]
+fn raw_to_celsius_full_scale() {
+    // raw=4095 → voltage≈3.3 → celsius = 27 - (3.3 - 0.706) / 0.001721 ≈ 27 - 1508 ≈ -1481
+    // Very negative temperature (unrealistic, but mathematically correct)
+    let temp = raw_to_celsius(4095);
+    assert!(
+        temp < -1000.0,
+        "raw=4095 should give very negative celsius (voltage=3.3 >> 0.706): {temp}"
+    );
 }

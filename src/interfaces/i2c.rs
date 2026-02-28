@@ -4,8 +4,8 @@
 //! The I2C master operates at 100 kHz or 400 kHz.
 
 use crate::protocol::{
-    Command, Response, ResponseData, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED,
-    ERROR_VALUE_OUT_OF_RANGE,
+    Command, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_VALUE_OUT_OF_RANGE, Response,
+    ResponseData,
 };
 
 /// I2C configuration parameters.
@@ -17,7 +17,10 @@ pub struct I2cConfig {
 
 impl Default for I2cConfig {
     fn default() -> Self {
-        Self { freq_hz: 100_000, configured: false }
+        Self {
+            freq_hz: 100_000,
+            configured: false,
+        }
     }
 }
 
@@ -43,7 +46,10 @@ pub fn handle_configure<'a>(cmd: &Command<'a>) -> Result<I2cConfig, Response<'a>
         None => return Err(Response::error(cmd.id, ERROR_MISSING_FIELD)),
     };
 
-    Ok(I2cConfig { freq_hz, configured: true })
+    Ok(I2cConfig {
+        freq_hz,
+        configured: true,
+    })
 }
 
 /// Handle an I2C `read` command.

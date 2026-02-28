@@ -49,3 +49,33 @@ fn save_then_load_stub_returns_none() {
 fn erase_credentials_stub_returns_ok() {
     assert_eq!(erase_credentials(), Ok(()));
 }
+
+// ----- Credentials boundary length edge cases -----
+
+#[test]
+fn credentials_ssid_exactly_32_chars() {
+    let ssid = "A".repeat(32);
+    let creds = Credentials::new(&ssid, "pass").unwrap();
+    assert_eq!(creds.ssid.len(), 32);
+}
+
+#[test]
+fn credentials_password_exactly_64_chars() {
+    let password = "P".repeat(64);
+    let creds = Credentials::new("ssid", &password).unwrap();
+    assert_eq!(creds.password.len(), 64);
+}
+
+#[test]
+fn credentials_empty_ssid_succeeds() {
+    // heapless::String allows empty — no minimum length enforced
+    let creds = Credentials::new("", "pass").unwrap();
+    assert_eq!(creds.ssid.as_str(), "");
+}
+
+#[test]
+fn credentials_empty_password_succeeds() {
+    // Open networks have no password
+    let creds = Credentials::new("OpenNet", "").unwrap();
+    assert_eq!(creds.password.as_str(), "");
+}

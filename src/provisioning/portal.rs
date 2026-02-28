@@ -163,4 +163,3 @@ fn hex_nibble(b: u8) -> Result<u8, ParseError> {
         _ => Err(ParseError::InvalidPercentEncoding),
     }
 }
-

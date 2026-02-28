@@ -1,16 +1,17 @@
 use pico_socketeer::protocol::{
-    parse_command, serialize_response, AdcChannel, FrameReader, Response, ResponseData,
-    MAX_MSG_LEN, ERROR_INVALID_PIN, ERROR_MALFORMED_JSON, ERROR_MISSING_FIELD,
+    AdcChannel, ERROR_INVALID_PIN, ERROR_MALFORMED_JSON, ERROR_MISSING_FIELD,
     ERROR_MISSING_VERSION, ERROR_MSG_TOO_LARGE, ERROR_NOT_CONFIGURED, ERROR_PERIPHERAL_BUSY,
     ERROR_PERIPHERAL_ERROR, ERROR_PIN_IN_USE, ERROR_UNKNOWN_ACTION, ERROR_UNKNOWN_INTERFACE,
-    ERROR_UNSUPPORTED_VERSION, ERROR_VALUE_OUT_OF_RANGE,
+    ERROR_UNSUPPORTED_VERSION, ERROR_VALUE_OUT_OF_RANGE, FrameReader, MAX_MSG_LEN, Response,
+    ResponseData, parse_command, serialize_response,
 };
 
 // ----- Serialize / Deserialize round-trips -----
 
 #[test]
 fn parse_valid_gpio_write_command() {
-    let json = br#"{"version":1,"id":"abc","interface":"gpio","action":"write","pin":15,"value":1}"#;
+    let json =
+        br#"{"version":1,"id":"abc","interface":"gpio","action":"write","pin":15,"value":1}"#;
     let cmd = parse_command(json).unwrap();
     assert_eq!(cmd.id, "abc");
     assert_eq!(cmd.interface, Some("gpio"));
@@ -37,7 +38,10 @@ fn serialize_error_response() {
     let n = serialize_response(&resp, &mut buf).unwrap();
     let s = core::str::from_utf8(&buf[..n]).unwrap();
     assert!(s.contains("\"ok\":false"), "missing ok:false: {s}");
-    assert!(s.contains("\"error\":\"invalid_pin\""), "missing error: {s}");
+    assert!(
+        s.contains("\"error\":\"invalid_pin\""),
+        "missing error: {s}"
+    );
 }
 
 // ----- Version validation -----
@@ -84,7 +88,10 @@ fn frame_exactly_512_bytes_is_accepted() {
     // (might fail JSON parse if id content breaks serde, but size check passes)
     let result = parse_command(&buf);
     // Should NOT return msg_too_large — either ok or other parse error
-    assert!(result != Err(ERROR_MSG_TOO_LARGE), "512-byte frame should not return msg_too_large");
+    assert!(
+        result != Err(ERROR_MSG_TOO_LARGE),
+        "512-byte frame should not return msg_too_large"
+    );
 }
 
 #[test]
@@ -165,7 +172,13 @@ fn response_data_gpio_read_shape() {
 
 #[test]
 fn response_data_adc_read_shape() {
-    let resp = Response::ok("a1", Some(ResponseData::AdcRead { raw: 2048, voltage: 1.650 }));
+    let resp = Response::ok(
+        "a1",
+        Some(ResponseData::AdcRead {
+            raw: 2048,
+            voltage: 1.650,
+        }),
+    );
     let mut buf = [0u8; 128];
     let n = serialize_response(&resp, &mut buf).unwrap();
     let s = core::str::from_utf8(&buf[..n]).unwrap();
@@ -190,7 +203,10 @@ fn response_data_bytes_shape() {
     let mut buf = [0u8; 128];
     let n = serialize_response(&resp, &mut buf).unwrap();
     let s = core::str::from_utf8(&buf[..n]).unwrap();
-    assert!(s.contains("\"bytes\":[72,101,108]"), "bytes data shape: {s}");
+    assert!(
+        s.contains("\"bytes\":[72,101,108]"),
+        "bytes data shape: {s}"
+    );
 }
 
 // ----- FrameReader -----
@@ -231,8 +247,105 @@ fn adc_channel_numeric_deserialization() {
 fn adc_channel_temp_deserialization() {
     // Temperature sensor is encoded as channel 3 (numeric) since serde-json-core
     // does not support deserialize_any for mixed number/string field types.
-    let json =
-        br#"{"version":1,"id":"a","interface":"adc","action":"read","adc_channel":3}"#;
+    let json = br#"{"version":1,"id":"a","interface":"adc","action":"read","adc_channel":3}"#;
     let cmd = parse_command(json).unwrap();
     assert_eq!(cmd.adc_channel, Some(AdcChannel::Temp));
+}
+
+// ----- FrameReader edge cases -----
+
+#[test]
+fn frame_reader_exactly_511_bytes_succeeds() {
+    // MAX_MSG_LEN=512 includes the newline, so 511 data bytes + \n is the max valid frame.
+    let mut fr = FrameReader::new();
+    for _ in 0..MAX_MSG_LEN - 1 {
+        assert_eq!(fr.push(b'A').unwrap(), None);
+    }
+    let result = fr.push(b'\n').unwrap();
+    assert!(
+        result.is_some(),
+        "511 data bytes + newline should produce a valid frame"
+    );
+    assert_eq!(result.unwrap().len(), MAX_MSG_LEN - 1);
+}
+
+#[test]
+fn frame_reader_consecutive_frames() {
+    let mut fr = FrameReader::new();
+    let input = b"hello\nworld\n";
+    let mut frames: Vec<Vec<u8>> = Vec::new();
+    for &byte in input {
+        match fr.push(byte) {
+            Ok(Some(slice)) => frames.push(slice.to_vec()),
+            Ok(None) => {}
+            Err(_) => panic!("unexpected error"),
+        }
+    }
+    assert_eq!(frames.len(), 2);
+    assert_eq!(frames[0], b"hello");
+    assert_eq!(frames[1], b"world");
+}
+
+#[test]
+fn frame_reader_overflow_recovery() {
+    let mut fr = FrameReader::new();
+    // Push 520 bytes (triggers overflow after 511)
+    for _ in 0..520 {
+        let _ = fr.push(b'x');
+    }
+    // Newline should return error (overflow)
+    let result = fr.push(b'\n');
+    assert_eq!(result, Err(ERROR_MSG_TOO_LARGE));
+    // Now push a valid short frame — should recover
+    for &byte in b"ok" {
+        assert_eq!(fr.push(byte).unwrap(), None);
+    }
+    let result = fr.push(b'\n').unwrap();
+    assert_eq!(result, Some(b"ok" as &[u8]));
+}
+
+#[test]
+fn frame_reader_binary_data_with_null_bytes() {
+    let mut fr = FrameReader::new();
+    let input: [u8; 4] = [0x00, 0xFF, 0x80, b'\n'];
+    let mut result = None;
+    for &byte in &input {
+        if let Ok(Some(slice)) = fr.push(byte) {
+            result = Some(slice.to_vec());
+        }
+    }
+    assert_eq!(result.unwrap(), &[0x00u8, 0xFF, 0x80]);
+}
+
+#[test]
+fn frame_reader_empty_frame() {
+    let mut fr = FrameReader::new();
+    let result = fr.push(b'\n').unwrap();
+    assert_eq!(result, Some(b"" as &[u8]));
+}
+
+// ----- ADC channel deserialization edge cases -----
+
+#[test]
+fn adc_channel_out_of_range_returns_malformed_json() {
+    let json = br#"{"version":1,"id":"1","interface":"adc","action":"read","adc_channel":4}"#;
+    let err = parse_command(json).unwrap_err();
+    assert_eq!(err, ERROR_MALFORMED_JSON);
+}
+
+#[test]
+fn adc_channel_negative_returns_malformed_json() {
+    let json = br#"{"version":1,"id":"1","interface":"adc","action":"read","adc_channel":-1}"#;
+    let err = parse_command(json).unwrap_err();
+    assert_eq!(err, ERROR_MALFORMED_JSON);
+}
+
+// ----- Response serialization edge cases -----
+
+#[test]
+fn serialize_response_buffer_too_small() {
+    let resp = Response::ok("abc", None);
+    let mut buf = [0u8; 10]; // way too small
+    let result = serialize_response(&resp, &mut buf);
+    assert_eq!(result, Err(ERROR_MSG_TOO_LARGE));
 }

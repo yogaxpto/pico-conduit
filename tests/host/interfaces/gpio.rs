@@ -2,7 +2,7 @@ use embedded_hal_mock::eh1::digital::{Mock as PinMock, State, Transaction};
 use pico_socketeer::interfaces::gpio::{handle_read, handle_set_mode, handle_write};
 use pico_socketeer::interfaces::is_pin_available;
 use pico_socketeer::protocol::{
-    Command, ResponseData, ERROR_INVALID_PIN, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE,
+    Command, ERROR_INVALID_PIN, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, ResponseData,
 };
 
 fn make_cmd_write<'a>(id: &'a str, pin: Option<u8>, value: Option<u8>) -> Command<'a> {
@@ -229,4 +229,37 @@ fn pin_29_is_reserved() {
 #[test]
 fn pin_23_is_reserved() {
     assert!(!is_pin_available(23));
+}
+
+// ----- Reserved pin edge cases -----
+
+#[test]
+fn pin_24_is_reserved() {
+    assert!(!is_pin_available(24));
+}
+
+#[test]
+fn pin_25_is_reserved() {
+    assert!(!is_pin_available(25));
+}
+
+#[test]
+fn pin_26_is_reserved() {
+    assert!(!is_pin_available(26));
+}
+
+#[test]
+fn pin_30_is_unavailable() {
+    // Pin 30 is beyond the RP2350 GPIO range (0–29)
+    assert!(!is_pin_available(30));
+}
+
+// ----- set_mode validation edge cases -----
+
+#[test]
+fn gpio_set_mode_invalid_pull_returns_error() {
+    let cmd = make_cmd_set_mode("ep1", Some(5), Some("input"), Some("pullup"));
+    let resp = handle_set_mode(&cmd);
+    assert!(!resp.ok);
+    assert_eq!(resp.error, Some(ERROR_VALUE_OUT_OF_RANGE));
 }

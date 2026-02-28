@@ -1,6 +1,6 @@
 use pico_socketeer::interfaces::pwm::{
-    handle_disable, handle_enable, handle_set_duty, handle_set_freq, validate_channel,
-    MAX_PWM_CHANNEL,
+    MAX_PWM_CHANNEL, handle_disable, handle_enable, handle_set_duty, handle_set_freq,
+    validate_channel,
 };
 use pico_socketeer::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE};
 

@@ -3,8 +3,8 @@
 //! Supports `transfer`, `write`, and `configure` actions on SPI0 or SPI1.
 
 use crate::protocol::{
-    Command, Response, ResponseData, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED,
-    ERROR_VALUE_OUT_OF_RANGE,
+    Command, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_VALUE_OUT_OF_RANGE, Response,
+    ResponseData,
 };
 
 /// SPI configuration parameters.
@@ -18,7 +18,12 @@ pub struct SpiConfig {
 
 impl Default for SpiConfig {
     fn default() -> Self {
-        Self { freq_hz: 1_000_000, cpol: 0, cpha: 0, configured: false }
+        Self {
+            freq_hz: 1_000_000,
+            cpol: 0,
+            cpha: 0,
+            configured: false,
+        }
     }
 }
 
@@ -56,7 +61,12 @@ pub fn handle_configure<'a>(cmd: &Command<'a>) -> Result<SpiConfig, Response<'a>
         None => 0,
     };
 
-    Ok(SpiConfig { freq_hz, cpol, cpha, configured: true })
+    Ok(SpiConfig {
+        freq_hz,
+        cpol,
+        cpha,
+        configured: true,
+    })
 }
 
 /// Handle a SPI `transfer` (full-duplex) command.

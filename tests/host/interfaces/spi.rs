@@ -1,6 +1,6 @@
 use pico_socketeer::interfaces::spi::{handle_configure, handle_transfer, handle_write};
 use pico_socketeer::protocol::{
-    Command, ResponseData, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_VALUE_OUT_OF_RANGE,
+    Command, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_VALUE_OUT_OF_RANGE, ResponseData,
 };
 
 fn make_spi_cmd<'a>(id: &'a str, action: &'a str, spi: Option<u8>) -> Command<'a> {
@@ -126,4 +126,51 @@ fn spi_write_unconfigured_returns_not_configured() {
     let resp = handle_write(&cmd, false);
     assert!(!resp.ok);
     assert_eq!(resp.error, Some(ERROR_NOT_CONFIGURED));
+}
+
+// ----- SPI validation edge cases -----
+
+#[test]
+fn spi_configure_freq_zero_returns_error() {
+    let mut cmd = make_spi_cmd("ec1", "configure", Some(0));
+    cmd.freq_hz = Some(0);
+    let err = handle_configure(&cmd).unwrap_err();
+    assert_eq!(err.error, Some(ERROR_VALUE_OUT_OF_RANGE));
+}
+
+#[test]
+fn spi_configure_invalid_cpha() {
+    let mut cmd = make_spi_cmd("ec2", "configure", Some(0));
+    cmd.freq_hz = Some(1_000_000);
+    cmd.cpha = Some(2); // only 0 or 1 valid
+    let err = handle_configure(&cmd).unwrap_err();
+    assert_eq!(err.error, Some(ERROR_VALUE_OUT_OF_RANGE));
+}
+
+#[test]
+fn spi_transfer_empty_bytes_returns_missing_field() {
+    let mut cmd = make_spi_cmd("ec3", "transfer", Some(0));
+    cmd.bytes = Some(heapless::Vec::new()); // empty
+    let resp = handle_transfer(&cmd, true, &[0x00]);
+    assert!(!resp.ok);
+    assert_eq!(resp.error, Some(ERROR_MISSING_FIELD));
+}
+
+#[test]
+fn spi_transfer_mosi_longer_than_miso() {
+    // MOSI has 4 bytes, MISO only 2 — response should have min(4, 2) = 2 bytes
+    let mut cmd = make_spi_cmd("ec4", "transfer", Some(0));
+    let mut mosi = heapless::Vec::new();
+    mosi.extend_from_slice(&[0x01, 0x02, 0x03, 0x04]).ok();
+    cmd.bytes = Some(mosi);
+    let miso = [0xAA, 0xBB];
+    let resp = handle_transfer(&cmd, true, &miso);
+    assert!(resp.ok);
+    match resp.data {
+        Some(ResponseData::Bytes { bytes }) => {
+            assert_eq!(bytes.len(), 2, "should return min(MOSI, MISO) bytes");
+            assert_eq!(bytes.as_slice(), &[0xAA, 0xBB]);
+        }
+        _ => panic!("expected Bytes response"),
+    }
 }

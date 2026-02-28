@@ -5,8 +5,8 @@
 
 use crate::interfaces::is_pin_available;
 use crate::protocol::{
-    Command, Response, ResponseData, ERROR_INVALID_PIN, ERROR_MISSING_FIELD,
-    ERROR_UNKNOWN_ACTION, ERROR_VALUE_OUT_OF_RANGE,
+    Command, ERROR_INVALID_PIN, ERROR_MISSING_FIELD, ERROR_UNKNOWN_ACTION,
+    ERROR_VALUE_OUT_OF_RANGE, Response, ResponseData,
 };
 use embedded_hal::digital::{InputPin, OutputPin};
 
@@ -23,7 +23,12 @@ pub fn handle_read<'a, P: InputPin>(pin: &mut P, cmd: &Command<'a>) -> Response<
         Ok(v) => v,
         Err(_) => return Response::error(cmd.id, crate::protocol::ERROR_PERIPHERAL_ERROR),
     };
-    Response::ok(cmd.id, Some(ResponseData::GpioRead { value: if high { 1 } else { 0 } }))
+    Response::ok(
+        cmd.id,
+        Some(ResponseData::GpioRead {
+            value: if high { 1 } else { 0 },
+        }),
+    )
 }
 
 /// Handle a GPIO write command using the provided output pin.
@@ -80,4 +85,3 @@ pub fn handle_set_mode<'a>(cmd: &Command<'a>) -> Response<'a> {
 pub fn handle_unknown_action<'a>(cmd: &Command<'a>) -> Response<'a> {
     Response::error(cmd.id, ERROR_UNKNOWN_ACTION)
 }
-

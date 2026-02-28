@@ -1,11 +1,7 @@
 use pico_socketeer::protocol::{Command, ERROR_UNKNOWN_ACTION, ERROR_UNKNOWN_INTERFACE};
 use pico_socketeer::router::validate_route;
 
-fn make_cmd<'a>(
-    id: &'a str,
-    interface: Option<&'a str>,
-    action: Option<&'a str>,
-) -> Command<'a> {
+fn make_cmd<'a>(id: &'a str, interface: Option<&'a str>, action: Option<&'a str>) -> Command<'a> {
     Command {
         version: Some(1),
         id,
@@ -151,4 +147,29 @@ fn all_valid_interfaces_accepted() {
             "route {iface}/{action} should be valid"
         );
     }
+}
+
+// ----- Router edge cases -----
+
+#[test]
+fn uppercase_interface_returns_unknown_interface() {
+    // Router is case-sensitive — "GPIO" is not "gpio"
+    let cmd = make_cmd("e1", Some("GPIO"), Some("read"));
+    let err = validate_route(&cmd).unwrap_err();
+    assert_eq!(err.error, Some(ERROR_UNKNOWN_INTERFACE));
+}
+
+#[test]
+fn empty_interface_returns_unknown_interface() {
+    let cmd = make_cmd("e2", Some(""), Some("read"));
+    let err = validate_route(&cmd).unwrap_err();
+    assert_eq!(err.error, Some(ERROR_UNKNOWN_INTERFACE));
+}
+
+#[test]
+fn both_none_returns_unknown_interface() {
+    // Interface is checked first, so both None gives unknown_interface
+    let cmd = make_cmd("e3", None, None);
+    let err = validate_route(&cmd).unwrap_err();
+    assert_eq!(err.error, Some(ERROR_UNKNOWN_INTERFACE));
 }

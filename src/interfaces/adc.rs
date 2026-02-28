@@ -6,7 +6,7 @@
 //! The ADC voltage conversion assumes the RP2350's 3.3V reference and 12-bit resolution.
 
 use crate::protocol::{
-    AdcChannel, Command, Response, ResponseData, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE,
+    AdcChannel, Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response, ResponseData,
 };
 
 /// ADC reference voltage for the RP2350 (3.3V).

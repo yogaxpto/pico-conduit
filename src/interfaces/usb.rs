@@ -3,8 +3,8 @@
 //! Supports `read` and `write` actions on the USB CDC ACM virtual serial port.
 
 use crate::protocol::{
-    Command, Response, ResponseData, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED,
-    ERROR_VALUE_OUT_OF_RANGE,
+    Command, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_VALUE_OUT_OF_RANGE, Response,
+    ResponseData,
 };
 
 /// Handle a USB CDC `write` command.

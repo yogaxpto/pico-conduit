@@ -1,6 +1,5 @@
 use pico_socketeer::provisioning::portal::{
-    ConnectForm, Method, ParseError, RequestLine, decode_url_encoded, parse_connect_form,
-    parse_request_line,
+    Method, ParseError, decode_url_encoded, parse_connect_form, parse_request_line,
 };
 
 // ----- Request line parsing -----
@@ -156,4 +155,87 @@ fn full_form_decode_and_parse() {
     let form = parse_connect_form(decoded).unwrap();
     assert_eq!(form.ssid, "My Network");
     assert_eq!(form.password, "hunter2!");
+}
+
+// ----- URL decoding edge cases -----
+
+#[test]
+fn decode_trailing_percent() {
+    let mut out = [0u8; 128];
+    let err = decode_url_encoded(b"test%", &mut out).unwrap_err();
+    assert_eq!(err, ParseError::InvalidPercentEncoding);
+}
+
+#[test]
+fn decode_lowercase_hex() {
+    let mut out = [0u8; 128];
+    let s = decode_url_encoded(b"%2f", &mut out).unwrap();
+    assert_eq!(s, "/");
+}
+
+#[test]
+fn decode_mixed_plus_and_percent20() {
+    let mut out = [0u8; 128];
+    let s = decode_url_encoded(b"a+b%20c", &mut out).unwrap();
+    assert_eq!(s, "a b c");
+}
+
+#[test]
+fn decode_null_byte_succeeds() {
+    // U+0000 is valid UTF-8 (single byte 0x00)
+    let mut out = [0u8; 128];
+    let s = decode_url_encoded(b"a%00b", &mut out).unwrap();
+    assert_eq!(s, "a\0b");
+}
+
+#[test]
+fn decode_invalid_utf8_sequence() {
+    // 0xFF 0xFE is not valid UTF-8
+    let mut out = [0u8; 128];
+    let err = decode_url_encoded(b"%FF%FE", &mut out).unwrap_err();
+    assert_eq!(err, ParseError::MalformedFormBody);
+}
+
+#[test]
+fn decode_output_buffer_overflow() {
+    // Output buffer is [u8; 128], input of 129 plain ASCII bytes overflows it
+    let input = [b'A'; 129];
+    let mut out = [0u8; 128];
+    let err = decode_url_encoded(&input, &mut out).unwrap_err();
+    assert_eq!(err, ParseError::MalformedFormBody);
+}
+
+// ----- Form parsing edge cases -----
+
+#[test]
+fn parse_connect_form_empty_body() {
+    let err = parse_connect_form("").unwrap_err();
+    assert_eq!(err, ParseError::MissingFormField);
+}
+
+#[test]
+fn parse_connect_form_empty_values() {
+    // Empty values are valid — an open network has no password
+    let form = parse_connect_form("ssid=&password=").unwrap();
+    assert_eq!(form.ssid, "");
+    assert_eq!(form.password, "");
+}
+
+#[test]
+fn parse_connect_form_duplicate_keys() {
+    // Last value wins when keys are duplicated
+    let form = parse_connect_form("ssid=first&ssid=second&password=pass").unwrap();
+    assert_eq!(form.ssid, "second");
+    assert_eq!(form.password, "pass");
+}
+
+// ----- Request line edge cases -----
+
+#[test]
+fn parse_request_line_no_trailing_newline() {
+    // The unwrap_or fallback should handle lines without CRLF/LF
+    let line = b"GET / HTTP/1.1";
+    let req = parse_request_line(line).unwrap();
+    assert_eq!(req.method, Method::Get);
+    assert_eq!(req.path, "/");
 }

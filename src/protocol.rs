@@ -216,12 +216,22 @@ pub struct Response<'a> {
 impl<'a> Response<'a> {
     /// Construct a successful response with optional data payload.
     pub fn ok(id: &'a str, data: Option<ResponseData>) -> Self {
-        Self { id, ok: true, data, error: None }
+        Self {
+            id,
+            ok: true,
+            data,
+            error: None,
+        }
     }
 
     /// Construct an error response.
     pub fn error(id: &'a str, error: &'static str) -> Self {
-        Self { id, ok: false, data: None, error: Some(error) }
+        Self {
+            id,
+            ok: false,
+            data: None,
+            error: Some(error),
+        }
     }
 }
 
@@ -237,8 +247,8 @@ pub fn parse_command(buf: &[u8]) -> Result<Command<'_>, &'static str> {
     if buf.len() > MAX_MSG_LEN {
         return Err(ERROR_MSG_TOO_LARGE);
     }
-    let (cmd, _) = serde_json_core::from_slice::<Command<'_>>(buf)
-        .map_err(|_| ERROR_MALFORMED_JSON)?;
+    let (cmd, _) =
+        serde_json_core::from_slice::<Command<'_>>(buf).map_err(|_| ERROR_MALFORMED_JSON)?;
     cmd.check_version()?;
     Ok(cmd)
 }
@@ -268,7 +278,11 @@ pub struct FrameReader {
 
 impl FrameReader {
     pub const fn new() -> Self {
-        Self { buf: [0u8; MAX_MSG_LEN], pos: 0, overflowed: false }
+        Self {
+            buf: [0u8; MAX_MSG_LEN],
+            pos: 0,
+            overflowed: false,
+        }
     }
 
     /// Reset the reader state (call after processing a frame or on error).

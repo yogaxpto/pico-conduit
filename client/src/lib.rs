@@ -187,11 +187,19 @@ impl PicoSocketeer {
         m.insert("action".into(), "read".into());
         m.insert("adc_channel".into(), channel.into());
         let resp = self.cmd(m)?;
-        let data = resp.data.as_ref().ok_or_else(|| Error::BadResponse("missing data".into()))?;
-        let raw = data.get("raw").and_then(|v| v.as_u64())
+        let data = resp
+            .data
+            .as_ref()
+            .ok_or_else(|| Error::BadResponse("missing data".into()))?;
+        let raw = data
+            .get("raw")
+            .and_then(|v| v.as_u64())
             .ok_or_else(|| Error::BadResponse("missing data.raw".into()))? as u16;
-        let voltage = data.get("voltage").and_then(|v| v.as_f64())
-            .ok_or_else(|| Error::BadResponse("missing data.voltage".into()))? as f32;
+        let voltage = data
+            .get("voltage")
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| Error::BadResponse("missing data.voltage".into()))?
+            as f32;
         Ok((raw, voltage))
     }
 
@@ -202,9 +210,15 @@ impl PicoSocketeer {
         m.insert("action".into(), "read".into());
         m.insert("adc_channel".into(), 3u8.into()); // Temp = channel 3
         let resp = self.cmd(m)?;
-        let data = resp.data.as_ref().ok_or_else(|| Error::BadResponse("missing data".into()))?;
-        let celsius = data.get("celsius").and_then(|v| v.as_f64())
-            .ok_or_else(|| Error::BadResponse("missing data.celsius".into()))? as f32;
+        let data = resp
+            .data
+            .as_ref()
+            .ok_or_else(|| Error::BadResponse("missing data".into()))?;
+        let celsius = data
+            .get("celsius")
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| Error::BadResponse("missing data.celsius".into()))?
+            as f32;
         Ok(celsius)
     }
 
@@ -420,7 +434,9 @@ impl PicoSocketeer {
         m.insert("interface".into(), "config".into());
         m.insert("action".into(), "get".into());
         let resp = self.cmd(m)?;
-        let data = resp.data.ok_or_else(|| Error::BadResponse("missing data".into()))?;
+        let data = resp
+            .data
+            .ok_or_else(|| Error::BadResponse("missing data".into()))?;
         let info: ConfigInfo = serde_json::from_value(data)?;
         Ok(info)
     }
@@ -433,7 +449,9 @@ fn bytes_to_json(bytes: &[u8]) -> Value {
 }
 
 fn extract_bytes(resp: RawResponse) -> Result<Vec<u8>> {
-    let data = resp.data.ok_or_else(|| Error::BadResponse("missing data".into()))?;
+    let data = resp
+        .data
+        .ok_or_else(|| Error::BadResponse("missing data".into()))?;
     let arr = data
         .get("bytes")
         .and_then(|v| v.as_array())

@@ -3,9 +3,7 @@
 //! Controls PWM slices on the RP2350. The `channel` field in commands refers to a
 //! PWM channel number (0–15 on RP2350, which has 8 slices × 2 channels each).
 
-use crate::protocol::{
-    Command, Response, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE,
-};
+use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response};
 
 /// Maximum PWM channel index on RP2350 (8 slices × 2 channels = 16 total, indexed 0–15).
 pub const MAX_PWM_CHANNEL: u8 = 15;

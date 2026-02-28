@@ -54,15 +54,24 @@ pub enum LedState {
 /// - 3 dots (S):  100ms ON / 100ms OFF each (last dot uses 2000ms OFF as word gap + repeat pause)
 pub const SOS_TIMING: &[(bool, u64)] = &[
     // 3 dots (S) — dit, dit, dit
-    (true, 100), (false, 100),
-    (true, 100), (false, 100),
-    (true, 100), (false, 300), // inter-letter gap after S
+    (true, 100),
+    (false, 100),
+    (true, 100),
+    (false, 100),
+    (true, 100),
+    (false, 300), // inter-letter gap after S
     // 3 dashes (O) — dah, dah, dah
-    (true, 300), (false, 100),
-    (true, 300), (false, 100),
-    (true, 300), (false, 300), // inter-letter gap after O
+    (true, 300),
+    (false, 100),
+    (true, 300),
+    (false, 100),
+    (true, 300),
+    (false, 300), // inter-letter gap after O
     // 3 dots (S) — dit, dit, dit
-    (true, 100), (false, 100),
-    (true, 100), (false, 100),
-    (true, 100), (false, 2000), // 2-second pause before repeat
+    (true, 100),
+    (false, 100),
+    (true, 100),
+    (false, 100),
+    (true, 100),
+    (false, 2000), // 2-second pause before repeat
 ];

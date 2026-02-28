@@ -10,16 +10,16 @@
 
 use cyw43::JoinOptions;
 use embassy_executor::Spawner;
-use embassy_net::{tcp::TcpSocket, Config, IpListenEndpoint, Stack, StackResources};
+use embassy_net::{Config, IpListenEndpoint, Stack, StackResources, tcp::TcpSocket};
 use embassy_rp::gpio::{Level, Output};
 use embassy_rp::pio::Pio;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
-use embassy_time::{with_timeout, Duration, Timer};
+use embassy_time::{Duration, Timer, with_timeout};
 use embedded_io_async::Write as _;
 use static_cell::StaticCell;
 
 use pico_socketeer::led::{LedState, SOS_TIMING};
-use pico_socketeer::protocol::{parse_command, serialize_response, FrameReader, MAX_MSG_LEN};
+use pico_socketeer::protocol::{FrameReader, MAX_MSG_LEN, parse_command, serialize_response};
 use pico_socketeer::provisioning::storage::load_credentials;
 use pico_socketeer::router::validate_route;
 
@@ -46,12 +46,8 @@ embassy_rp::bind_interrupts!(struct Irqs {
 });
 
 // ---- Task type aliases ----
-type CywSpi = cyw43_pio::PioSpi<
-    'static,
-    embassy_rp::peripherals::PIO0,
-    0,
-    embassy_rp::peripherals::DMA_CH0,
->;
+type CywSpi =
+    cyw43_pio::PioSpi<'static, embassy_rp::peripherals::PIO0, 0, embassy_rp::peripherals::DMA_CH0>;
 type CywRunner = cyw43::Runner<'static, Output<'static>, CywSpi>;
 
 // ---- Background tasks ----
@@ -186,7 +182,14 @@ pub async fn start(spawner: Spawner, p: embassy_rp::Peripherals) {
         sta_mode(spawner, net_device, &mut control, ssid, pass).await;
     } else if let Some(creds) = flash_creds {
         defmt::info!("Using flash credentials");
-        sta_mode(spawner, net_device, &mut control, &creds.ssid, &creds.password).await;
+        sta_mode(
+            spawner,
+            net_device,
+            &mut control,
+            &creds.ssid,
+            &creds.password,
+        )
+        .await;
     } else {
         defmt::warn!("No credentials — provisioning mode (stub)");
         drive_led(&mut control, &LedState::Provisioning).await;
@@ -255,7 +258,10 @@ async fn tcp_server(stack: Stack<'_>, control: &mut cyw43::Control<'_>) {
 
         defmt::info!("accept() on port {}", TCP_PORT);
         match socket
-            .accept(IpListenEndpoint { addr: None, port: TCP_PORT })
+            .accept(IpListenEndpoint {
+                addr: None,
+                port: TCP_PORT,
+            })
             .await
         {
             Ok(()) => {

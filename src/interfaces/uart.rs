@@ -3,8 +3,8 @@
 //! Supports `read`, `write`, and `configure` actions on UART0 or UART1.
 
 use crate::protocol::{
-    Command, Response, ResponseData, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED,
-    ERROR_VALUE_OUT_OF_RANGE,
+    Command, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_VALUE_OUT_OF_RANGE, Response,
+    ResponseData,
 };
 
 /// UART configuration parameters, stored per-peripheral.
