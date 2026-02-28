@@ -32,9 +32,9 @@ pub fn raw_to_celsius(raw: u16) -> f32 {
 /// In the real firmware, the raw value is read from the RP2350 ADC peripheral before
 /// calling this function. For host tests, a mock raw value is provided directly.
 pub fn handle_read_with_raw<'a>(cmd: &Command<'a>, raw: u16) -> Response<'a> {
-    let channel = match cmd.adc_channel {
-        Some(ch) => ch,
-        None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+    let channel = match validate_read(cmd) {
+        Ok(ch) => ch,
+        Err(r) => return r,
     };
 
     match channel {

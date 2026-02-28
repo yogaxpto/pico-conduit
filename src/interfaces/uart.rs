@@ -2,10 +2,7 @@
 //!
 //! Supports `read`, `write`, and `configure` actions on UART0 or UART1.
 
-use crate::protocol::{
-    Command, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_VALUE_OUT_OF_RANGE, Response,
-    ResponseData,
-};
+use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response};
 
 /// UART configuration parameters, stored per-peripheral.
 #[derive(Clone, Debug, PartialEq)]
@@ -38,14 +35,7 @@ pub enum UartParity {
 
 /// Validate the UART peripheral index from a command.
 pub fn validate_uart<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
-    let idx = match cmd.uart {
-        Some(u) => u,
-        None => return Err(Response::error(cmd.id, ERROR_MISSING_FIELD)),
-    };
-    if idx > 1 {
-        return Err(Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE));
-    }
-    Ok(idx)
+    super::validate_index(cmd, cmd.uart, 1)
 }
 
 /// Handle a UART `configure` command.
@@ -89,14 +79,11 @@ pub fn handle_configure<'a>(cmd: &Command<'a>) -> Result<UartConfig, Response<'a
 /// Handle a UART `write` command.
 ///
 /// `configured` indicates whether the UART has been configured via `configure` first.
+/// The caller (router) is responsible for validating the peripheral index.
 pub fn handle_write<'a>(cmd: &Command<'a>, configured: bool) -> Response<'a> {
-    if !configured {
-        return Response::error(cmd.id, ERROR_NOT_CONFIGURED);
+    if let Err(r) = super::check_configured(cmd, configured) {
+        return r;
     }
-    let _uart = match validate_uart(cmd) {
-        Ok(u) => u,
-        Err(r) => return r,
-    };
     let _bytes = match &cmd.bytes {
         Some(b) if !b.is_empty() => b,
         Some(_) => return Response::error(cmd.id, ERROR_MISSING_FIELD),
@@ -114,8 +101,8 @@ pub fn handle_read_with_data<'a>(
     configured: bool,
     rx_data: &[u8],
 ) -> Response<'a> {
-    if !configured {
-        return Response::error(cmd.id, ERROR_NOT_CONFIGURED);
+    if let Err(r) = super::check_configured(cmd, configured) {
+        return r;
     }
     let _uart = match validate_uart(cmd) {
         Ok(u) => u,
@@ -126,8 +113,5 @@ pub fn handle_read_with_data<'a>(
         Some(_) => return Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE),
         None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
     };
-    let take = len.min(rx_data.len()).min(64);
-    let mut bytes = heapless::Vec::new();
-    bytes.extend_from_slice(&rx_data[..take]).ok();
-    Response::ok(cmd.id, Some(ResponseData::Bytes { bytes }))
+    super::bytes_response(cmd.id, rx_data, len)
 }

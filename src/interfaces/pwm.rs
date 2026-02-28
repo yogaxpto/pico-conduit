@@ -10,14 +10,7 @@ pub const MAX_PWM_CHANNEL: u8 = 15;
 
 /// Validate the PWM channel number from a command.
 pub fn validate_channel<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
-    let ch = match cmd.channel {
-        Some(c) => c,
-        None => return Err(Response::error(cmd.id, ERROR_MISSING_FIELD)),
-    };
-    if ch > MAX_PWM_CHANNEL {
-        return Err(Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE));
-    }
-    Ok(ch)
+    super::validate_index(cmd, cmd.channel, MAX_PWM_CHANNEL)
 }
 
 /// Handle a `pwm set_duty` command.

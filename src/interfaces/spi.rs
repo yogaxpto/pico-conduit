@@ -2,10 +2,7 @@
 //!
 //! Supports `transfer`, `write`, and `configure` actions on SPI0 or SPI1.
 
-use crate::protocol::{
-    Command, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_VALUE_OUT_OF_RANGE, Response,
-    ResponseData,
-};
+use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response};
 
 /// SPI configuration parameters.
 #[derive(Clone, Debug, PartialEq)]
@@ -29,14 +26,7 @@ impl Default for SpiConfig {
 
 /// Validate the SPI peripheral index from a command (0 or 1).
 pub fn validate_spi<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
-    let idx = match cmd.spi {
-        Some(s) => s,
-        None => return Err(Response::error(cmd.id, ERROR_MISSING_FIELD)),
-    };
-    if idx > 1 {
-        return Err(Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE));
-    }
-    Ok(idx)
+    super::validate_index(cmd, cmd.spi, 1)
 }
 
 /// Handle a SPI `configure` command.
@@ -77,8 +67,8 @@ pub fn handle_transfer<'a>(
     configured: bool,
     miso_data: &[u8],
 ) -> Response<'a> {
-    if !configured {
-        return Response::error(cmd.id, ERROR_NOT_CONFIGURED);
+    if let Err(r) = super::check_configured(cmd, configured) {
+        return r;
     }
     let _spi = match validate_spi(cmd) {
         Ok(s) => s,
@@ -88,21 +78,16 @@ pub fn handle_transfer<'a>(
         Some(b) if !b.is_empty() => b,
         _ => return Response::error(cmd.id, ERROR_MISSING_FIELD),
     };
-    let take = mosi.len().min(miso_data.len()).min(64);
-    let mut bytes = heapless::Vec::new();
-    bytes.extend_from_slice(&miso_data[..take]).ok();
-    Response::ok(cmd.id, Some(ResponseData::Bytes { bytes }))
+    super::bytes_response(cmd.id, miso_data, mosi.len())
 }
 
 /// Handle a SPI `write` (MOSI only, MISO discarded) command.
+///
+/// The caller (router) is responsible for validating the peripheral index.
 pub fn handle_write<'a>(cmd: &Command<'a>, configured: bool) -> Response<'a> {
-    if !configured {
-        return Response::error(cmd.id, ERROR_NOT_CONFIGURED);
+    if let Err(r) = super::check_configured(cmd, configured) {
+        return r;
     }
-    let _spi = match validate_spi(cmd) {
-        Ok(s) => s,
-        Err(r) => return r,
-    };
     match &cmd.bytes {
         Some(b) if !b.is_empty() => {}
         _ => return Response::error(cmd.id, ERROR_MISSING_FIELD),

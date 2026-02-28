@@ -3,10 +3,7 @@
 //! Supports `read`, `write`, `write_read`, and `configure` actions on I2C0 or I2C1.
 //! The I2C master operates at 100 kHz or 400 kHz.
 
-use crate::protocol::{
-    Command, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_VALUE_OUT_OF_RANGE, Response,
-    ResponseData,
-};
+use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response};
 
 /// I2C configuration parameters.
 #[derive(Clone, Debug, PartialEq)]
@@ -26,14 +23,15 @@ impl Default for I2cConfig {
 
 /// Validate the I2C peripheral index from a command (0 or 1).
 pub fn validate_i2c<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
-    let idx = match cmd.i2c {
-        Some(i) => i,
-        None => return Err(Response::error(cmd.id, ERROR_MISSING_FIELD)),
-    };
-    if idx > 1 {
-        return Err(Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE));
+    super::validate_index(cmd, cmd.i2c, 1)
+}
+
+/// Validate the I2C device address from a command.
+fn validate_addr<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
+    match cmd.addr {
+        Some(a) => Ok(a),
+        None => Err(Response::error(cmd.id, ERROR_MISSING_FIELD)),
     }
-    Ok(idx)
 }
 
 /// Handle an I2C `configure` command.
@@ -56,40 +54,35 @@ pub fn handle_configure<'a>(cmd: &Command<'a>) -> Result<I2cConfig, Response<'a>
 ///
 /// `rx_data` is the data the I2C slave would return (provided by caller / mock).
 pub fn handle_read<'a>(cmd: &'a Command<'a>, configured: bool, rx_data: &[u8]) -> Response<'a> {
-    if !configured {
-        return Response::error(cmd.id, ERROR_NOT_CONFIGURED);
+    if let Err(r) = super::check_configured(cmd, configured) {
+        return r;
     }
     let _i2c = match validate_i2c(cmd) {
         Ok(i) => i,
         Err(r) => return r,
     };
-    let _addr = match cmd.addr {
-        Some(a) => a,
-        None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+    let _addr = match validate_addr(cmd) {
+        Ok(a) => a,
+        Err(r) => return r,
     };
     let len = match cmd.len {
         Some(l) if l > 0 => l,
         Some(_) => return Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE),
         None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
     };
-    let take = len.min(rx_data.len()).min(64);
-    let mut bytes = heapless::Vec::new();
-    bytes.extend_from_slice(&rx_data[..take]).ok();
-    Response::ok(cmd.id, Some(ResponseData::Bytes { bytes }))
+    super::bytes_response(cmd.id, rx_data, len)
 }
 
 /// Handle an I2C `write` command.
+///
+/// The caller (router) is responsible for validating the peripheral index.
 pub fn handle_write<'a>(cmd: &Command<'a>, configured: bool) -> Response<'a> {
-    if !configured {
-        return Response::error(cmd.id, ERROR_NOT_CONFIGURED);
+    if let Err(r) = super::check_configured(cmd, configured) {
+        return r;
     }
-    let _i2c = match validate_i2c(cmd) {
-        Ok(i) => i,
+    let _addr = match validate_addr(cmd) {
+        Ok(a) => a,
         Err(r) => return r,
-    };
-    let _addr = match cmd.addr {
-        Some(a) => a,
-        None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
     };
     match &cmd.bytes {
         Some(b) if !b.is_empty() => {}
@@ -106,16 +99,16 @@ pub fn handle_write_read<'a>(
     configured: bool,
     rx_data: &[u8],
 ) -> Response<'a> {
-    if !configured {
-        return Response::error(cmd.id, ERROR_NOT_CONFIGURED);
+    if let Err(r) = super::check_configured(cmd, configured) {
+        return r;
     }
     let _i2c = match validate_i2c(cmd) {
         Ok(i) => i,
         Err(r) => return r,
     };
-    let _addr = match cmd.addr {
-        Some(a) => a,
-        None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+    let _addr = match validate_addr(cmd) {
+        Ok(a) => a,
+        Err(r) => return r,
     };
     match &cmd.write_bytes {
         Some(b) if !b.is_empty() => {}
@@ -126,8 +119,5 @@ pub fn handle_write_read<'a>(
         Some(_) => return Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE),
         None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
     };
-    let take = read_len.min(rx_data.len()).min(64);
-    let mut bytes = heapless::Vec::new();
-    bytes.extend_from_slice(&rx_data[..take]).ok();
-    Response::ok(cmd.id, Some(ResponseData::Bytes { bytes }))
+    super::bytes_response(cmd.id, rx_data, read_len)
 }

@@ -2,17 +2,14 @@
 //!
 //! Supports `read` and `write` actions on the USB CDC ACM virtual serial port.
 
-use crate::protocol::{
-    Command, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_VALUE_OUT_OF_RANGE, Response,
-    ResponseData,
-};
+use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response};
 
 /// Handle a USB CDC `write` command.
 ///
 /// `configured` indicates whether the USB device stack is initialized and connected.
 pub fn handle_write<'a>(cmd: &Command<'a>, configured: bool) -> Response<'a> {
-    if !configured {
-        return Response::error(cmd.id, ERROR_NOT_CONFIGURED);
+    if let Err(r) = super::check_configured(cmd, configured) {
+        return r;
     }
     match &cmd.bytes {
         Some(b) if !b.is_empty() => {}
@@ -30,16 +27,13 @@ pub fn handle_read_with_data<'a>(
     configured: bool,
     rx_data: &[u8],
 ) -> Response<'a> {
-    if !configured {
-        return Response::error(cmd.id, ERROR_NOT_CONFIGURED);
+    if let Err(r) = super::check_configured(cmd, configured) {
+        return r;
     }
     let len = match cmd.len {
         Some(l) if l > 0 => l,
         Some(_) => return Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE),
         None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
     };
-    let take = len.min(rx_data.len()).min(64);
-    let mut bytes = heapless::Vec::new();
-    bytes.extend_from_slice(&rx_data[..take]).ok();
-    Response::ok(cmd.id, Some(ResponseData::Bytes { bytes }))
+    super::bytes_response(cmd.id, rx_data, len)
 }

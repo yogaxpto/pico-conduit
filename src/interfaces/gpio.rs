@@ -10,15 +10,24 @@ use crate::protocol::{
 };
 use embedded_hal::digital::{InputPin, OutputPin};
 
-/// Handle a GPIO read command using the provided input pin.
-pub fn handle_read<'a, P: InputPin>(pin: &mut P, cmd: &Command<'a>) -> Response<'a> {
+/// Validate the GPIO pin number from a command, rejecting reserved pins.
+fn validate_pin<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
     let pin_num = match cmd.pin {
         Some(p) => p,
-        None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+        None => return Err(Response::error(cmd.id, ERROR_MISSING_FIELD)),
     };
     if !is_pin_available(pin_num) {
-        return Response::error(cmd.id, ERROR_INVALID_PIN);
+        return Err(Response::error(cmd.id, ERROR_INVALID_PIN));
     }
+    Ok(pin_num)
+}
+
+/// Handle a GPIO read command using the provided input pin.
+pub fn handle_read<'a, P: InputPin>(pin: &mut P, cmd: &Command<'a>) -> Response<'a> {
+    let _pin_num = match validate_pin(cmd) {
+        Ok(p) => p,
+        Err(r) => return r,
+    };
     let high = match pin.is_high() {
         Ok(v) => v,
         Err(_) => return Response::error(cmd.id, crate::protocol::ERROR_PERIPHERAL_ERROR),
@@ -33,13 +42,10 @@ pub fn handle_read<'a, P: InputPin>(pin: &mut P, cmd: &Command<'a>) -> Response<
 
 /// Handle a GPIO write command using the provided output pin.
 pub fn handle_write<'a, P: OutputPin>(pin: &mut P, cmd: &Command<'a>) -> Response<'a> {
-    let pin_num = match cmd.pin {
-        Some(p) => p,
-        None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+    let _pin_num = match validate_pin(cmd) {
+        Ok(p) => p,
+        Err(r) => return r,
     };
-    if !is_pin_available(pin_num) {
-        return Response::error(cmd.id, ERROR_INVALID_PIN);
-    }
     match cmd.value {
         Some(0) => {
             if pin.set_low().is_err() {
@@ -59,13 +65,10 @@ pub fn handle_write<'a, P: OutputPin>(pin: &mut P, cmd: &Command<'a>) -> Respons
 
 /// Handle a GPIO set_mode command (mode/pull configuration).
 pub fn handle_set_mode<'a>(cmd: &Command<'a>) -> Response<'a> {
-    let pin_num = match cmd.pin {
-        Some(p) => p,
-        None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+    let _pin_num = match validate_pin(cmd) {
+        Ok(p) => p,
+        Err(r) => return r,
     };
-    if !is_pin_available(pin_num) {
-        return Response::error(cmd.id, ERROR_INVALID_PIN);
-    }
     let _mode = match cmd.mode {
         Some(m) if m == "input" || m == "output" => m,
         Some(_) => return Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE),
