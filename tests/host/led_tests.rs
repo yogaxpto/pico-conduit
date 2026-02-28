@@ -64,7 +64,7 @@ fn sos_timing_alternates_on_off() {
 #[test]
 fn sos_timing_correct_durations() {
     // ON entries are at even indices (0, 2, 4, 6, 8, 10, 12, 14, 16)
-    let expected_on_ms = [100u64, 100, 100, 300, 300, 300, 100, 100, 100];
+    let expected_on_ms = [100u16, 100, 100, 300, 300, 300, 100, 100, 100];
     for (pair_idx, &expected_ms) in expected_on_ms.iter().enumerate() {
         let entry_idx = pair_idx * 2; // even index = ON entry
         assert_eq!(

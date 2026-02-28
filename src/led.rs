@@ -44,7 +44,7 @@ pub enum LedState {
 
 /// SOS Morse timing: 9 ON/OFF pairs encoding · · · — — — · · · followed by a 2-second pause.
 ///
-/// Each tuple is `(on: bool, duration_ms: u64)`.
+/// Each tuple is `(on: bool, duration_ms: u16)`.
 /// - true  = LED on
 /// - false = LED off
 ///
@@ -52,7 +52,7 @@ pub enum LedState {
 /// - 3 dots (S):  100ms ON / 100ms OFF each (last dot uses 300ms OFF as inter-letter gap)
 /// - 3 dashes (O): 300ms ON / 100ms OFF each (last dash uses 300ms OFF as inter-letter gap)
 /// - 3 dots (S):  100ms ON / 100ms OFF each (last dot uses 2000ms OFF as word gap + repeat pause)
-pub const SOS_TIMING: &[(bool, u64)] = &[
+pub const SOS_TIMING: &[(bool, u16)] = &[
     // 3 dots (S) — dit, dit, dit
     (true, 100),
     (false, 100),
