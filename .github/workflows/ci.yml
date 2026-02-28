@@ -72,6 +72,27 @@ jobs:
       - name: Build firmware (release)
         run: cargo build --release --target thumbv8m.main-none-eabihf
 
+      - name: Verify firmware fits in flash
+        run: |
+          # Pico 2W has 4 MB of flash. The top 8 KB is reserved for the
+          # CREDENTIALS region (sequential-storage), leaving 4088 KB for
+          # BOOT2 + firmware code/data.
+          FLASH_MAX=$(( 4096 * 1024 - 8 * 1024 ))   # 4,186,112 bytes
+
+          FIRMWARE=target/thumbv8m.main-none-eabihf/release/pico-socketeer
+          TEXT=$(size "$FIRMWARE" | awk 'NR==2 {print $1}')
+          DATA=$(size "$FIRMWARE" | awk 'NR==2 {print $2}')
+          USED=$(( TEXT + DATA ))
+
+          echo "Flash budget : ${FLASH_MAX} bytes (4 MB − 8 KB credentials)"
+          echo "Firmware size: ${USED} bytes  (text=${TEXT}, data=${DATA})"
+          echo "Remaining    : $(( FLASH_MAX - USED )) bytes"
+
+          if [ "$USED" -gt "$FLASH_MAX" ]; then
+            echo "FAIL: firmware exceeds flash capacity by $(( USED - FLASH_MAX )) bytes"
+            exit 1
+          fi
+
       - name: Upload ELF artifact
         uses: actions/upload-artifact@v4
         with:
