@@ -141,6 +141,38 @@ src/
     └── portal.rs
 ```
 
+## Updating Firmware
+
+### Step 1 — Send the reboot command
+
+With the device running and connected to Wi-Fi, send:
+
+```sh
+echo '{"version":1,"id":"1","interface":"system","action":"reboot_to_bootloader"}' \
+    | nc 192.168.1.x 4242
+```
+
+The device replies `{"id":"1","ok":true,...}`, flashes the LED 10 times rapidly, then
+reboots into USB bootloader mode.
+
+### Step 2 — Flash the new firmware
+
+1. Plug a data-capable USB-A → micro-USB cable from the Pico 2W to your computer.
+2. A drive named **RPI-RP2** appears on your computer.
+3. Drag the new `.uf2` file onto the drive.
+4. The device reboots automatically and resumes normal operation.
+
+### Manual fallback
+
+If the device is unreachable over TCP (e.g. during initial setup or after a failed flash):
+
+1. Hold the **BOOTSEL** button on the Pico 2W.
+2. While holding BOOTSEL, plug in the USB cable.
+3. Release BOOTSEL — the **RPI-RP2** drive appears.
+4. Proceed from step 3 above.
+
+---
+
 ## Related Documents
 
 - [PROTOCOL.md](PROTOCOL.md) — Full wire protocol specification

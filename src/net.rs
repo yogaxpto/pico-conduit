@@ -222,6 +222,17 @@ pub async fn led_task() {
                     set_led(false).await;
                     break;
                 }
+                LedState::Rebooting => {
+                    // 10 rapid flashes then OFF — one-shot before USB bootloader reboot
+                    for _ in 0..10u8 {
+                        set_led(true).await;
+                        Timer::after_millis(50).await;
+                        set_led(false).await;
+                        Timer::after_millis(50).await;
+                    }
+                    set_led(false).await;
+                    break;
+                }
             }
             // For repeating patterns: break if a new signal arrived
             if LED_SIGNAL.signaled() {
@@ -591,6 +602,15 @@ async fn handle_client(
             defmt::warn!("TCP write error");
             socket.abort();
             return;
+        }
+
+        if device_state.pending_reboot {
+            defmt::info!("rebooting to USB bootloader");
+            LED_SIGNAL.signal(LedState::Rebooting);
+            Timer::after_millis(650).await; // 10 × 100 ms flash cycle + margin
+            embassy_rp::rom_data::reset_to_usb_boot(0, 0);
+            #[allow(clippy::empty_loop)]
+            loop {}
         }
     }
 }

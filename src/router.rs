@@ -9,6 +9,7 @@ use crate::protocol::{
     Command, ERROR_NOT_CONFIGURED, ERROR_UNKNOWN_ACTION, ERROR_UNKNOWN_INTERFACE, Response,
     ResponseData,
 };
+use core::fmt::Write as _;
 
 /// Peripheral configuration state tracked across commands within a single TCP session.
 ///
@@ -25,6 +26,8 @@ pub struct DeviceState {
     pub config_ip: heapless::String<16>,
     /// Whether the device is currently connected to Wi-Fi.
     pub config_connected: bool,
+    /// Set by `system/reboot_to_bootloader`; checked by `net.rs` after the response is flushed.
+    pub pending_reboot: bool,
 }
 
 impl Default for DeviceState {
@@ -37,6 +40,7 @@ impl Default for DeviceState {
             config_ssid: heapless::String::new(),
             config_ip: heapless::String::new(),
             config_connected: false,
+            pending_reboot: false,
         }
     }
 }
@@ -68,6 +72,7 @@ pub fn validate_route<'a>(cmd: &Command<'a>) -> Result<(&'a str, &'a str), Respo
         "adc" => matches!(action, "read"),
         "usb" => matches!(action, "read" | "write"),
         "config" => matches!(action, "get"),
+        "system" => matches!(action, "get_version" | "reboot_to_bootloader"),
         _ => return Err(Response::error(cmd.id, ERROR_UNKNOWN_INTERFACE)),
     };
 
@@ -175,6 +180,17 @@ pub fn dispatch<'a>(
                 connected: state.config_connected,
             }),
         ),
+
+        // ---- System ----
+        ("system", "get_version") => {
+            let mut version: heapless::String<16> = heapless::String::new();
+            let _ = version.write_str(env!("CARGO_PKG_VERSION"));
+            Response::ok(cmd.id, Some(ResponseData::Version { version }))
+        }
+        ("system", "reboot_to_bootloader") => {
+            state.pending_reboot = true;
+            Response::ok(cmd.id, None)
+        }
 
         // validate_route already rejected invalid routes
         _ => unreachable!(),

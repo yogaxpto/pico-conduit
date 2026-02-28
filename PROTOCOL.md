@@ -21,7 +21,7 @@ response object terminated by `\n`. One connection handles one in-flight request
 {
   "version": 1,
   "id": "<opaque string>",
-  "interface": "<gpio|uart|spi|i2c|pwm|adc|usb|config>",
+  "interface": "<gpio|uart|spi|i2c|pwm|adc|usb|config|system>",
   "action": "<action>",
   ...interface-specific fields...
 }
@@ -135,6 +135,47 @@ Channel mapping: `0` = GPIO26, `1` = GPIO27, `2` = GPIO28, `3` = onboard tempera
 | Action | Additional fields | Response `data` |
 |--------|-------------------|-----------------|
 | `get`  | _(none)_          | `{"ssid": "...", "ip": "...", "connected": bool}` |
+
+### `system`
+
+| Action | Additional fields | Response `data` |
+|--------|-------------------|-----------------|
+| `get_version` | _(none)_ | `{"version": "0.1.0"}` (firmware version from `Cargo.toml`) |
+| `reboot_to_bootloader` | _(none)_ | _(none)_ |
+
+#### `system/get_version`
+
+Returns the firmware version string.
+
+```json
+{"version":1,"id":"1","interface":"system","action":"get_version"}
+```
+Response:
+```json
+{"id":"1","ok":true,"data":{"version":"0.1.0"},"error":null}
+```
+
+#### `system/reboot_to_bootloader`
+
+Instructs the device to reboot into USB bootloader mode. The device sends the `ok`
+response, flashes the LED 10 times rapidly, then calls the RP2350 ROM to enter USB
+bootloader mode. The TCP connection will close.
+
+After rebooting, the Pico 2W presents as a USB mass storage drive named **RPI-RP2**.
+Drag a new `.uf2` firmware file onto the drive to update the firmware. The device reboots
+automatically when the copy completes.
+
+> **Note:** A physical USB cable connecting the Pico 2W to a computer is required to
+> complete the update after the device reboots into bootloader mode.
+
+```json
+{"version":1,"id":"1","interface":"system","action":"reboot_to_bootloader"}
+```
+Response:
+```json
+{"id":"1","ok":true,"data":null,"error":null}
+```
+*(TCP connection closes; device reboots into USB bootloader)*
 
 ---
 

@@ -14,6 +14,7 @@ The onboard LED (driven via CYW43 GPIO0) communicates firmware state through bli
 | `Reconnecting` | 250 ms on, 250 ms off (medium blink) | Lost Wi-Fi — reconnect backoff in progress |
 | `Error` | SOS Morse pattern (see below) | 10 minutes of failed reconnections; requires power cycle or fix |
 | `Saving` | 5 rapid flashes | Writing credentials to flash |
+| `Rebooting` | 10 rapid flashes then OFF | USB bootloader reboot imminent — release TCP connection |
 
 ## Timing Diagrams
 
@@ -84,6 +85,15 @@ Full SOS timing sequence (ms on/off pairs):
 ```
 +100-100+100-100+100-100+100-100+100-100 (5 flashes then off)
 ```
+
+### Rebooting
+```
++50-50+50-50+50-50+50-50+50-50+50-50+50-50+50-50+50-50+50-50 (10 flashes then off)
+```
+
+Triggered by the `system/reboot_to_bootloader` TCP command. After this pattern completes,
+the device reboots into USB bootloader mode and the TCP connection closes. The Pico 2W
+will then appear as an **RPI-RP2** USB mass storage drive.
 
 ## Notes
 

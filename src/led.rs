@@ -18,10 +18,12 @@
 //! | `Reconnecting` | Medium blink 2 Hz | 250ms ON/250ms OFF | Wi-Fi lost, retrying |
 //! | `Error` | SOS Morse | ·‌·‌·‌—‌—‌—‌·‌·‌· + 2s pause | Unrecoverable error |
 //! | `Saving` | 5 rapid flashes then OFF | 5×(100ms ON/100ms OFF) then OFF | Saving credentials |
+//! | `Rebooting` | 10 rapid flashes then OFF | 10×(50ms ON/50ms OFF) then OFF | USB bootloader imminent |
 
 /// All possible LED states for the device.
 ///
-/// The 8 variants correspond exactly to the LED Status Reference table in OBJECTIVE.md Phase 5b.
+/// The 9 variants correspond to the LED Status Reference table in OBJECTIVE.md Phase 5b
+/// and Phase 9a (Rebooting).
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum LedState {
     /// Firmware starting up — 3-flash burst (100ms ON / 100ms OFF × 3, 1s OFF, repeat)
@@ -40,6 +42,8 @@ pub enum LedState {
     Error,
     /// Saving credentials, rebooting — 5 rapid flashes then OFF
     Saving,
+    /// USB bootloader reboot imminent — 10 rapid flashes then OFF (10×(50ms ON/50ms OFF))
+    Rebooting,
 }
 
 /// SOS Morse timing: 9 ON/OFF pairs encoding · · · — — — · · · followed by a 2-second pause.

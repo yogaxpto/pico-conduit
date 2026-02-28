@@ -198,6 +198,8 @@ pub enum ResponseData {
         ip: heapless::String<16>,
         connected: bool,
     },
+    /// Firmware version report: `{"version": "0.1.0"}`.
+    Version { version: heapless::String<16> },
 }
 
 /// A response sent from the Pico to the client.
