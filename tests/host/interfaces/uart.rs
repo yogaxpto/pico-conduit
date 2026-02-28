@@ -99,7 +99,7 @@ fn uart_write_unconfigured_returns_not_configured() {
 fn uart_write_configured_succeeds() {
     let mut cmd = make_uart_cmd("w2", "write", Some(0));
     let mut bytes = heapless::Vec::new();
-    bytes.extend_from_slice(&[b'H', b'i']).ok();
+    bytes.extend_from_slice(b"Hi").ok();
     cmd.bytes = Some(bytes);
     let resp = handle_write(&cmd, true);
     assert!(resp.ok, "configured write should succeed: {:?}", resp.error);

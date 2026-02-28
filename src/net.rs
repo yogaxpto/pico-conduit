@@ -348,14 +348,13 @@ async fn handle_client(socket: &mut TcpSocket<'_>) {
             }),
         };
 
-        if let Some(resp) = response {
-            if let Ok(n) = serialize_response(&resp, &mut resp_buf) {
-                if socket.write_all(&resp_buf[..n]).await.is_err() {
-                    defmt::warn!("TCP write error");
-                    socket.abort();
-                    return;
-                }
-            }
+        if let Some(resp) = response
+            && let Ok(n) = serialize_response(&resp, &mut resp_buf)
+            && socket.write_all(&resp_buf[..n]).await.is_err()
+        {
+            defmt::warn!("TCP write error");
+            socket.abort();
+            return;
         }
     }
 }

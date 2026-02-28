@@ -38,7 +38,7 @@ fn make_usb_cmd<'a>(id: &'a str, action: &'a str) -> Command<'a> {
 fn usb_write_configured_succeeds() {
     let mut cmd = make_usb_cmd("w1", "write");
     let mut bytes = heapless::Vec::new();
-    bytes.extend_from_slice(&[b'H', b'i']).ok();
+    bytes.extend_from_slice(b"Hi").ok();
     cmd.bytes = Some(bytes);
     let resp = handle_write(&cmd, true);
     assert!(resp.ok, "usb write should succeed: {:?}", resp.error);
