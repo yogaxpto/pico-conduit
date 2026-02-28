@@ -17,7 +17,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
 
 // ── Error type ────────────────────────────────────────────────────────────────
