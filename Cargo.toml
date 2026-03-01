@@ -124,6 +124,7 @@ opt-level     = "s"      # optimise for binary size
 lto           = true     # link-time optimisation; reduces firmware size significantly
 codegen-units = 1        # required for LTO; disables parallel codegen
 debug         = true     # retain symbols so probe-rs / defmt can decode RTT log messages
+panic         = "abort"  # no unwinding tables; panic-probe halts anyway
 
 [profile.dev]
 opt-level = "s"

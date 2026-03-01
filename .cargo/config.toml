@@ -8,6 +8,7 @@ rustflags = [
     "-C", "link-arg=-Tlink.x",
     "-C", "link-arg=--nmagic",
     "-C", "link-arg=-Tdefmt.x",
+    "-C", "target-cpu=cortex-m33",
 ]
 
 [env]

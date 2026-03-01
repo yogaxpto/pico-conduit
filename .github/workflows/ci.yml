@@ -13,6 +13,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
 
 jobs:
   # ── Fast checks (run in parallel) ──────────────────────────────────
@@ -25,15 +26,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+          shared-key: embedded-release
 
+      - uses: cargo-bins/cargo-binstall@v1
       - name: Install flip-link
-        run: cargo install flip-link --locked
+        run: cargo binstall flip-link --no-confirm --locked
 
       - name: Format check
         run: cargo fmt --all --check
 
       - name: Clippy (embedded firmware)
-        run: cargo clippy --target thumbv8m.main-none-eabihf -- -D warnings
+        run: cargo clippy --release --target thumbv8m.main-none-eabihf -- -D warnings
 
       - name: Clippy (client crate)
         run: cargo clippy -p pico-socketeer-client --target $(rustc -vV | sed -n 's/host: //p') -- -D warnings
@@ -65,9 +68,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+          shared-key: embedded-release
 
+      - uses: cargo-bins/cargo-binstall@v1
       - name: Install flip-link
-        run: cargo install flip-link --locked
+        run: cargo binstall flip-link --no-confirm --locked
 
       - name: Build firmware (release)
         run: cargo build --release --target thumbv8m.main-none-eabihf
@@ -113,8 +118,9 @@ jobs:
         with:
           name: firmware-elf
 
+      - uses: cargo-bins/cargo-binstall@v1
       - name: Install elf2uf2-rs
-        run: cargo install elf2uf2-rs --locked
+        run: cargo binstall elf2uf2-rs --no-confirm --locked
 
       - name: Convert ELF to UF2
         run: elf2uf2-rs pico-socketeer pico-socketeer.uf2
