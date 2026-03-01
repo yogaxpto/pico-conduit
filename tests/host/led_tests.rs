@@ -1,4 +1,4 @@
-use pico_socketeer::led::{LedState, SOS_TIMING};
+use pico_socketeer::led::{LedPattern, LedState, SOS_TIMING};
 
 /// LedState must have exactly 9 variants — one for each row in the LED State Reference table.
 /// This test prevents silent omissions when the table is updated.
@@ -82,4 +82,65 @@ fn sos_timing_trailing_pause() {
     let last = SOS_TIMING.last().unwrap();
     assert!(!last.0, "last SOS_TIMING entry must be OFF");
     assert_eq!(last.1, 2000, "trailing pause must be 2000ms");
+}
+
+// ── LedPattern tests ──────────────────────────────────────────────────────────
+
+#[test]
+fn connected_pattern_is_solid_on() {
+    assert_eq!(LedState::Connected.pattern(), LedPattern::Solid(true));
+}
+
+#[test]
+fn saving_pattern_is_one_shot() {
+    assert!(matches!(LedState::Saving.pattern(), LedPattern::OneShot(_)));
+}
+
+#[test]
+fn rebooting_pattern_is_one_shot() {
+    assert!(matches!(LedState::Rebooting.pattern(), LedPattern::OneShot(_)));
+}
+
+#[test]
+fn error_pattern_uses_sos_timing() {
+    assert_eq!(LedState::Error.pattern(), LedPattern::Repeat(SOS_TIMING));
+}
+
+#[test]
+fn repeating_states_are_repeat() {
+    for state in [
+        LedState::Booting,
+        LedState::Provisioning,
+        LedState::Scanning,
+        LedState::Connecting,
+        LedState::Reconnecting,
+    ] {
+        assert!(matches!(state.pattern(), LedPattern::Repeat(_)));
+    }
+}
+
+#[test]
+fn saving_step_count() {
+    let LedPattern::OneShot(steps) = LedState::Saving.pattern() else {
+        panic!("expected OneShot")
+    };
+    assert_eq!(steps.len(), 10, "5 flashes × 2 steps each");
+}
+
+#[test]
+fn rebooting_step_count() {
+    let LedPattern::OneShot(steps) = LedState::Rebooting.pattern() else {
+        panic!("expected OneShot")
+    };
+    assert_eq!(steps.len(), 20, "10 flashes × 2 steps each");
+}
+
+#[test]
+fn booting_trailing_gap_is_1000ms() {
+    let LedPattern::Repeat(steps) = LedState::Booting.pattern() else {
+        panic!("expected Repeat")
+    };
+    let last = steps.last().unwrap();
+    assert!(!last.0, "trailing step must be OFF");
+    assert_eq!(last.1, 1000, "trailing gap must be 1000ms");
 }

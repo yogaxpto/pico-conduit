@@ -34,13 +34,12 @@ use embassy_rp::pio::Pio;
 use embassy_rp::watchdog::Watchdog;
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::mutex::Mutex;
-use embassy_sync::signal::Signal;
 use embassy_time::{Duration, Timer, with_timeout};
 use embedded_io_async::Write as _;
 use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use static_cell::StaticCell;
 
-use pico_socketeer::led::{LedState, SOS_TIMING};
+use pico_socketeer::led::{LedPattern, LedState, LED_SIGNAL};
 use pico_socketeer::protocol::{FrameReader, MAX_MSG_LEN, parse_command, serialize_response};
 use pico_socketeer::provisioning::portal::{
     Method, decode_url_encoded, make_ap_ssid, parse_connect_form, parse_request_line,
@@ -103,10 +102,6 @@ impl core::ops::DerefMut for ControlWrapper {
 /// Global CYW43 control handle.  Populated in `start()` before any task uses it.
 static CONTROL_MUTEX: Mutex<CriticalSectionRawMutex, Option<ControlWrapper>> = Mutex::new(None);
 
-// ── LED signal ────────────────────────────────────────────────────────────────
-/// Signal any LED state change from anywhere in the firmware.
-pub static LED_SIGNAL: Signal<CriticalSectionRawMutex, LedState> = Signal::new();
-
 // ── Interrupt bindings ────────────────────────────────────────────────────────
 embassy_rp::bind_interrupts!(struct Irqs {
     PIO0_IRQ_0 => embassy_rp::pio::InterruptHandler<embassy_rp::peripherals::PIO0>;
@@ -150,94 +145,31 @@ async fn set_led(on: bool) {
     }
 }
 
-/// LED task — drives the LED based on `LED_SIGNAL` state changes.
-///
-/// Repeating patterns loop until a new signal arrives.  One-shot patterns (`Connected`, `Saving`)
-/// drive once then wait for the next state.
+/// LED task — generic pattern runner driven by [`LED_SIGNAL`] state changes.
 #[embassy_executor::task]
 pub async fn led_task() {
     loop {
         let state = LED_SIGNAL.wait().await;
-        loop {
-            match state {
-                LedState::Booting => {
-                    for _ in 0..3u8 {
-                        set_led(true).await;
-                        Timer::after_millis(100).await;
-                        set_led(false).await;
-                        Timer::after_millis(100).await;
-                    }
-                    Timer::after_millis(1000).await;
-                }
-                LedState::Provisioning => {
-                    set_led(true).await;
-                    Timer::after_secs(1).await;
-                    set_led(false).await;
-                    Timer::after_secs(1).await;
-                }
-                LedState::Scanning => {
-                    for _ in 0..2u8 {
-                        set_led(true).await;
-                        Timer::after_millis(100).await;
-                        set_led(false).await;
-                        Timer::after_millis(100).await;
-                    }
-                    Timer::after_millis(700).await;
-                }
-                LedState::Connecting => {
-                    set_led(true).await;
-                    Timer::after_millis(100).await;
-                    set_led(false).await;
-                    Timer::after_millis(100).await;
-                }
-                LedState::Connected => {
-                    // Solid ON — break inner loop and wait for next signal
-                    set_led(true).await;
-                    break;
-                }
-                LedState::Reconnecting => {
-                    set_led(true).await;
-                    Timer::after_millis(250).await;
-                    set_led(false).await;
-                    Timer::after_millis(250).await;
-                }
-                LedState::Error => {
-                    for &(on, ms) in SOS_TIMING {
-                        set_led(on).await;
-                        Timer::after_millis(u64::from(ms)).await;
-                    }
-                    if LED_SIGNAL.signaled() {
-                        break;
-                    }
-                    continue; // repeat SOS
-                }
-                LedState::Saving => {
-                    // 5 rapid flashes then OFF — one-shot
-                    for _ in 0..5u8 {
-                        set_led(true).await;
-                        Timer::after_millis(100).await;
-                        set_led(false).await;
-                        Timer::after_millis(100).await;
-                    }
-                    set_led(false).await;
-                    break;
-                }
-                LedState::Rebooting => {
-                    // 10 rapid flashes then OFF — one-shot before USB bootloader reboot
-                    for _ in 0..10u8 {
-                        set_led(true).await;
-                        Timer::after_millis(50).await;
-                        set_led(false).await;
-                        Timer::after_millis(50).await;
-                    }
-                    set_led(false).await;
-                    break;
-                }
+        match state.pattern() {
+            LedPattern::Solid(on) => {
+                set_led(on).await;
             }
-            // For repeating patterns: break if a new signal arrived
-            if LED_SIGNAL.signaled() {
-                break;
+            LedPattern::OneShot(steps) => {
+                for &(on, ms) in steps {
+                    set_led(on).await;
+                    Timer::after_millis(u64::from(ms)).await;
+                }
+                set_led(false).await;
             }
+            LedPattern::Repeat(steps) => loop {
+                for &(on, ms) in steps {
+                    set_led(on).await;
+                    Timer::after_millis(u64::from(ms)).await;
+                }
+                if LED_SIGNAL.signaled() {
+                    break;
+                }
+            },
         }
     }
 }

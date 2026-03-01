@@ -1,10 +1,10 @@
 //! LED status signaling.
 //!
-//! Defines the [`LedState`] enum and [`SOS_TIMING`] constant. These are `no_std`-compatible
+//! Defines [`LedState`], [`LedPattern`], and [`SOS_TIMING`]. These are `no_std`-compatible
 //! and fully testable on the host.
 //!
-//! The `LED_SIGNAL` static and `led_task` live in `src/main.rs` because they depend on
-//! `embassy_sync` and the CYW43 runner type, which are embedded-only.
+//! [`LED_SIGNAL`] is also defined here, gated to `target_os = "none"` because it depends
+//! on `embassy_sync`. `led_task` and `set_led` live in `src/net.rs` (CYW43-specific).
 //!
 //! # LED State Reference
 //!
@@ -19,6 +19,87 @@
 //! | `Error` | SOS Morse | ·‌·‌·‌—‌—‌—‌·‌·‌· + 2s pause | Unrecoverable error |
 //! | `Saving` | 5 rapid flashes then OFF | 5×(100ms ON/100ms OFF) then OFF | Saving credentials |
 //! | `Rebooting` | 10 rapid flashes then OFF | 10×(50ms ON/50ms OFF) then OFF | USB bootloader imminent |
+
+// ── Pattern step sequences ────────────────────────────────────────────────────
+// Each entry is (on: bool, duration_ms: u16).  The runner sets the LED to `on`
+// then waits `duration_ms` milliseconds before advancing to the next step.
+
+const BOOTING_STEPS: &[(bool, u16)] = &[
+    (true, 100),
+    (false, 100),
+    (true, 100),
+    (false, 100),
+    (true, 100),
+    (false, 100),
+    (false, 1000), // 1 s trailing gap before repeating
+];
+
+const PROVISIONING_STEPS: &[(bool, u16)] = &[(true, 1000), (false, 1000)];
+
+const SCANNING_STEPS: &[(bool, u16)] = &[
+    (true, 100),
+    (false, 100),
+    (true, 100),
+    (false, 100),
+    (false, 700), // 700 ms gap before repeating
+];
+
+const CONNECTING_STEPS: &[(bool, u16)] = &[(true, 100), (false, 100)];
+
+const RECONNECTING_STEPS: &[(bool, u16)] = &[(true, 250), (false, 250)];
+
+// 5 rapid flashes — 10 steps
+const SAVING_STEPS: &[(bool, u16)] = &[
+    (true, 100),
+    (false, 100),
+    (true, 100),
+    (false, 100),
+    (true, 100),
+    (false, 100),
+    (true, 100),
+    (false, 100),
+    (true, 100),
+    (false, 100),
+];
+
+// 10 rapid flashes — 20 steps
+const REBOOTING_STEPS: &[(bool, u16)] = &[
+    (true, 50),
+    (false, 50),
+    (true, 50),
+    (false, 50),
+    (true, 50),
+    (false, 50),
+    (true, 50),
+    (false, 50),
+    (true, 50),
+    (false, 50),
+    (true, 50),
+    (false, 50),
+    (true, 50),
+    (false, 50),
+    (true, 50),
+    (false, 50),
+    (true, 50),
+    (false, 50),
+    (true, 50),
+    (false, 50),
+];
+
+// ── LedPattern ────────────────────────────────────────────────────────────────
+
+/// Describes how the LED driver should play a state's pattern.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum LedPattern {
+    /// Set the LED to a fixed state and hold until the next signal.
+    Solid(bool),
+    /// Repeat the step sequence indefinitely until a new signal arrives.
+    Repeat(&'static [(bool, u16)]),
+    /// Play the step sequence once, turn the LED off, then wait for the next signal.
+    OneShot(&'static [(bool, u16)]),
+}
+
+// ── LedState ──────────────────────────────────────────────────────────────────
 
 /// All possible LED states for the device.
 ///
@@ -45,6 +126,25 @@ pub enum LedState {
     /// USB bootloader reboot imminent — 10 rapid flashes then OFF (10×(50ms ON/50ms OFF))
     Rebooting,
 }
+
+impl LedState {
+    /// Returns the [`LedPattern`] for this state.
+    pub fn pattern(self) -> LedPattern {
+        match self {
+            LedState::Booting => LedPattern::Repeat(BOOTING_STEPS),
+            LedState::Provisioning => LedPattern::Repeat(PROVISIONING_STEPS),
+            LedState::Scanning => LedPattern::Repeat(SCANNING_STEPS),
+            LedState::Connecting => LedPattern::Repeat(CONNECTING_STEPS),
+            LedState::Connected => LedPattern::Solid(true),
+            LedState::Reconnecting => LedPattern::Repeat(RECONNECTING_STEPS),
+            LedState::Error => LedPattern::Repeat(SOS_TIMING),
+            LedState::Saving => LedPattern::OneShot(SAVING_STEPS),
+            LedState::Rebooting => LedPattern::OneShot(REBOOTING_STEPS),
+        }
+    }
+}
+
+// ── SOS timing ────────────────────────────────────────────────────────────────
 
 /// SOS Morse timing: 9 ON/OFF pairs encoding · · · — — — · · · followed by a 2-second pause.
 ///
@@ -79,3 +179,14 @@ pub const SOS_TIMING: &[(bool, u16)] = &[
     (true, 100),
     (false, 2000), // 2-second pause before repeat
 ];
+
+// ── LED_SIGNAL (embedded only) ────────────────────────────────────────────────
+
+#[cfg(target_os = "none")]
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
+
+/// Signal any LED state change from anywhere in the firmware.
+///
+/// Gated to `target_os = "none"` because it depends on `embassy_sync`.
+#[cfg(target_os = "none")]
+pub static LED_SIGNAL: Signal<CriticalSectionRawMutex, LedState> = Signal::new();
