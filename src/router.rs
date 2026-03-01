@@ -45,6 +45,20 @@ impl Default for DeviceState {
     }
 }
 
+/// Routing table: each entry maps an interface name to its valid actions.
+/// To add a new interface, add one row here — no other code in this file changes.
+static VALID_ROUTES: &[(&str, &[&str])] = &[
+    ("gpio", &["read", "write", "set_mode"]),
+    ("uart", &["read", "write", "configure"]),
+    ("spi", &["transfer", "write", "configure"]),
+    ("i2c", &["read", "write", "write_read", "configure"]),
+    ("pwm", &["set_duty", "set_freq", "enable", "disable"]),
+    ("adc", &["read"]),
+    ("usb", &["read", "write"]),
+    ("config", &["get"]),
+    ("system", &["get_version", "reboot_to_bootloader"]),
+];
+
 /// Dispatch a command to the appropriate interface handler.
 ///
 /// This function matches on `cmd.interface` and delegates to the corresponding module.
@@ -62,21 +76,13 @@ pub fn validate_route<'a>(cmd: &Command<'a>) -> Result<(&'a str, &'a str), Respo
         None => return Err(Response::error(cmd.id, ERROR_UNKNOWN_ACTION)),
     };
 
-    // Validate that the interface is one we know about
-    let valid_action = match interface {
-        "gpio" => matches!(action, "read" | "write" | "set_mode"),
-        "uart" => matches!(action, "read" | "write" | "configure"),
-        "spi" => matches!(action, "transfer" | "write" | "configure"),
-        "i2c" => matches!(action, "read" | "write" | "write_read" | "configure"),
-        "pwm" => matches!(action, "set_duty" | "set_freq" | "enable" | "disable"),
-        "adc" => matches!(action, "read"),
-        "usb" => matches!(action, "read" | "write"),
-        "config" => matches!(action, "get"),
-        "system" => matches!(action, "get_version" | "reboot_to_bootloader"),
-        _ => return Err(Response::error(cmd.id, ERROR_UNKNOWN_INTERFACE)),
-    };
+    let actions = VALID_ROUTES
+        .iter()
+        .find(|(iface, _)| *iface == interface)
+        .map(|(_, actions)| *actions)
+        .ok_or_else(|| Response::error(cmd.id, ERROR_UNKNOWN_INTERFACE))?;
 
-    if !valid_action {
+    if !actions.contains(&action) {
         return Err(Response::error(cmd.id, ERROR_UNKNOWN_ACTION));
     }
 
