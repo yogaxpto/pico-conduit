@@ -1,39 +1,9 @@
+use crate::fixtures::make_cmd;
 use pico_socketeer::protocol::{
-    AdcChannel, Command, ERROR_INVALID_PIN, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED,
+    AdcChannel, ERROR_INVALID_PIN, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED,
     ERROR_UNKNOWN_ACTION, ERROR_UNKNOWN_INTERFACE, ERROR_VALUE_OUT_OF_RANGE,
 };
 use pico_socketeer::router::{DeviceState, dispatch, validate_route};
-
-fn make_cmd<'a>(id: &'a str, interface: Option<&'a str>, action: Option<&'a str>) -> Command<'a> {
-    Command {
-        version: Some(1),
-        id,
-        interface,
-        action,
-        pin: None,
-        value: None,
-        mode: None,
-        pull: None,
-        uart: None,
-        bytes: None,
-        len: None,
-        baud: None,
-        data_bits: None,
-        parity: None,
-        stop_bits: None,
-        spi: None,
-        freq_hz: None,
-        cpol: None,
-        cpha: None,
-        i2c: None,
-        addr: None,
-        write_bytes: None,
-        read_len: None,
-        channel: None,
-        duty_u16: None,
-        adc_channel: None,
-    }
-}
 
 #[test]
 fn gpio_read_is_valid_route() {

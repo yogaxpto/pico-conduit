@@ -1,3 +1,4 @@
+mod fixtures;
 mod interfaces;
 mod led_tests;
 mod portal_tests;
