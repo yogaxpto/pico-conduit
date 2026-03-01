@@ -1,7 +1,7 @@
 use crate::fixtures::make_cmd;
 use pico_socketeer::protocol::{
-    AdcChannel, ERROR_INVALID_PIN, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED,
-    ERROR_UNKNOWN_ACTION, ERROR_UNKNOWN_INTERFACE, ERROR_VALUE_OUT_OF_RANGE,
+    AdcChannel, ERROR_INVALID_PIN, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_UNKNOWN_ACTION,
+    ERROR_UNKNOWN_INTERFACE, ERROR_VALUE_OUT_OF_RANGE,
 };
 use pico_socketeer::router::{DeviceState, dispatch, validate_route};
 
