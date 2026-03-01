@@ -3,6 +3,7 @@
 //! Supports `transfer`, `write`, and `configure` actions on SPI0 or SPI1.
 
 use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response};
+use super::try_r;
 
 /// SPI configuration parameters.
 #[derive(Clone, Debug, PartialEq)]
@@ -67,17 +68,9 @@ pub fn handle_transfer<'a>(
     configured: bool,
     miso_data: &[u8],
 ) -> Response<'a> {
-    if let Err(r) = super::check_configured(cmd, configured) {
-        return r;
-    }
-    let _spi = match validate_spi(cmd) {
-        Ok(s) => s,
-        Err(r) => return r,
-    };
-    let mosi = match &cmd.bytes {
-        Some(b) if !b.is_empty() => b,
-        _ => return Response::error(cmd.id, ERROR_MISSING_FIELD),
-    };
+    try_r!(super::check_configured(cmd, configured));
+    try_r!(validate_spi(cmd));
+    let mosi = try_r!(super::require_bytes(cmd, cmd.bytes.as_ref()));
     super::bytes_response(cmd.id, miso_data, mosi.len())
 }
 
@@ -85,12 +78,7 @@ pub fn handle_transfer<'a>(
 ///
 /// The caller (router) is responsible for validating the peripheral index.
 pub fn handle_write<'a>(cmd: &Command<'a>, configured: bool) -> Response<'a> {
-    if let Err(r) = super::check_configured(cmd, configured) {
-        return r;
-    }
-    match &cmd.bytes {
-        Some(b) if !b.is_empty() => {}
-        _ => return Response::error(cmd.id, ERROR_MISSING_FIELD),
-    };
+    try_r!(super::check_configured(cmd, configured));
+    try_r!(super::require_bytes(cmd, cmd.bytes.as_ref()));
     Response::ok(cmd.id, None)
 }

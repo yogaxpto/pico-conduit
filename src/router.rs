@@ -93,6 +93,30 @@ pub fn dispatch<'a>(
     route: (&str, &str),
     state: &mut DeviceState,
 ) -> Response<'a> {
+    // Apply peripheral configure: validate → store config → ok.
+    macro_rules! configure {
+        ($handler:path, $field:expr, $arr:expr) => {
+            match $handler(cmd) {
+                Ok(cfg) => {
+                    $arr[$field.unwrap_or(0) as usize] = cfg;
+                    Response::ok(cmd.id, None)
+                }
+                Err(r) => r,
+            }
+        };
+    }
+
+    // Dispatch a write-like action: validate index → call handler with configured flag.
+    macro_rules! peripheral_write {
+        ($validate:path, $arr:expr, $handler:path) => {{
+            let idx = match $validate(cmd) {
+                Ok(i) => i as usize,
+                Err(r) => return r,
+            };
+            $handler(cmd, $arr[idx].configured)
+        }};
+    }
+
     match route {
         // ---- GPIO ----
         ("gpio", "set_mode") => crate::interfaces::gpio::handle_set_mode(cmd),
@@ -108,57 +132,18 @@ pub fn dispatch<'a>(
         },
 
         // ---- UART ----
-        ("uart", "configure") => match uart::handle_configure(cmd) {
-            Ok(cfg) => {
-                let idx = cmd.uart.unwrap_or(0) as usize;
-                state.uart[idx] = cfg;
-                Response::ok(cmd.id, None)
-            }
-            Err(r) => r,
-        },
-        ("uart", "write") => {
-            let idx = match uart::validate_uart(cmd) {
-                Ok(i) => i as usize,
-                Err(r) => return r,
-            };
-            uart::handle_write(cmd, state.uart[idx].configured)
-        }
+        ("uart", "configure") => configure!(uart::handle_configure, cmd.uart, state.uart),
+        ("uart", "write") => peripheral_write!(uart::validate_uart, state.uart, uart::handle_write),
         ("uart", "read") => Response::error(cmd.id, ERROR_NOT_CONFIGURED),
 
         // ---- SPI ----
-        ("spi", "configure") => match spi::handle_configure(cmd) {
-            Ok(cfg) => {
-                let idx = cmd.spi.unwrap_or(0) as usize;
-                state.spi[idx] = cfg;
-                Response::ok(cmd.id, None)
-            }
-            Err(r) => r,
-        },
-        ("spi", "write") => {
-            let idx = match spi::validate_spi(cmd) {
-                Ok(i) => i as usize,
-                Err(r) => return r,
-            };
-            spi::handle_write(cmd, state.spi[idx].configured)
-        }
+        ("spi", "configure") => configure!(spi::handle_configure, cmd.spi, state.spi),
+        ("spi", "write") => peripheral_write!(spi::validate_spi, state.spi, spi::handle_write),
         ("spi", "transfer") => Response::error(cmd.id, ERROR_NOT_CONFIGURED),
 
         // ---- I2C ----
-        ("i2c", "configure") => match i2c::handle_configure(cmd) {
-            Ok(cfg) => {
-                let idx = cmd.i2c.unwrap_or(0) as usize;
-                state.i2c[idx] = cfg;
-                Response::ok(cmd.id, None)
-            }
-            Err(r) => r,
-        },
-        ("i2c", "write") => {
-            let idx = match i2c::validate_i2c(cmd) {
-                Ok(i) => i as usize,
-                Err(r) => return r,
-            };
-            i2c::handle_write(cmd, state.i2c[idx].configured)
-        }
+        ("i2c", "configure") => configure!(i2c::handle_configure, cmd.i2c, state.i2c),
+        ("i2c", "write") => peripheral_write!(i2c::validate_i2c, state.i2c, i2c::handle_write),
         ("i2c", "read") | ("i2c", "write_read") => Response::error(cmd.id, ERROR_NOT_CONFIGURED),
 
         // ---- PWM ----

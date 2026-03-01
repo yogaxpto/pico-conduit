@@ -4,6 +4,7 @@
 //! The I2C master operates at 100 kHz or 400 kHz.
 
 use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response};
+use super::try_r;
 
 /// I2C configuration parameters.
 #[derive(Clone, Debug, PartialEq)]
@@ -54,22 +55,10 @@ pub fn handle_configure<'a>(cmd: &Command<'a>) -> Result<I2cConfig, Response<'a>
 ///
 /// `rx_data` is the data the I2C slave would return (provided by caller / mock).
 pub fn handle_read<'a>(cmd: &'a Command<'a>, configured: bool, rx_data: &[u8]) -> Response<'a> {
-    if let Err(r) = super::check_configured(cmd, configured) {
-        return r;
-    }
-    let _i2c = match validate_i2c(cmd) {
-        Ok(i) => i,
-        Err(r) => return r,
-    };
-    let _addr = match validate_addr(cmd) {
-        Ok(a) => a,
-        Err(r) => return r,
-    };
-    let len = match cmd.len {
-        Some(l) if l > 0 => l,
-        Some(_) => return Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE),
-        None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
-    };
+    try_r!(super::check_configured(cmd, configured));
+    try_r!(validate_i2c(cmd));
+    try_r!(validate_addr(cmd));
+    let len = try_r!(super::require_positive(cmd, cmd.len));
     super::bytes_response(cmd.id, rx_data, len)
 }
 
@@ -77,17 +66,9 @@ pub fn handle_read<'a>(cmd: &'a Command<'a>, configured: bool, rx_data: &[u8]) -
 ///
 /// The caller (router) is responsible for validating the peripheral index.
 pub fn handle_write<'a>(cmd: &Command<'a>, configured: bool) -> Response<'a> {
-    if let Err(r) = super::check_configured(cmd, configured) {
-        return r;
-    }
-    let _addr = match validate_addr(cmd) {
-        Ok(a) => a,
-        Err(r) => return r,
-    };
-    match &cmd.bytes {
-        Some(b) if !b.is_empty() => {}
-        _ => return Response::error(cmd.id, ERROR_MISSING_FIELD),
-    };
+    try_r!(super::check_configured(cmd, configured));
+    try_r!(validate_addr(cmd));
+    try_r!(super::require_bytes(cmd, cmd.bytes.as_ref()));
     Response::ok(cmd.id, None)
 }
 
@@ -99,25 +80,10 @@ pub fn handle_write_read<'a>(
     configured: bool,
     rx_data: &[u8],
 ) -> Response<'a> {
-    if let Err(r) = super::check_configured(cmd, configured) {
-        return r;
-    }
-    let _i2c = match validate_i2c(cmd) {
-        Ok(i) => i,
-        Err(r) => return r,
-    };
-    let _addr = match validate_addr(cmd) {
-        Ok(a) => a,
-        Err(r) => return r,
-    };
-    match &cmd.write_bytes {
-        Some(b) if !b.is_empty() => {}
-        _ => return Response::error(cmd.id, ERROR_MISSING_FIELD),
-    };
-    let read_len = match cmd.read_len {
-        Some(l) if l > 0 => l,
-        Some(_) => return Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE),
-        None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
-    };
+    try_r!(super::check_configured(cmd, configured));
+    try_r!(validate_i2c(cmd));
+    try_r!(validate_addr(cmd));
+    try_r!(super::require_bytes(cmd, cmd.write_bytes.as_ref()));
+    let read_len = try_r!(super::require_positive(cmd, cmd.read_len));
     super::bytes_response(cmd.id, rx_data, read_len)
 }

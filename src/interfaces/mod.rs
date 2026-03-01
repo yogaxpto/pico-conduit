@@ -63,6 +63,45 @@ pub fn check_configured<'a>(cmd: &Command<'a>, configured: bool) -> Result<(), R
     }
 }
 
+/// Require a non-empty bytes field; returns [`ERROR_MISSING_FIELD`] if absent or empty.
+pub fn require_bytes<'cmd, 'a>(
+    cmd: &'cmd Command<'a>,
+    field: Option<&'cmd heapless::Vec<u8, 64>>,
+) -> Result<&'cmd heapless::Vec<u8, 64>, Response<'a>> {
+    match field {
+        Some(b) if !b.is_empty() => Ok(b),
+        _ => Err(Response::error(cmd.id, ERROR_MISSING_FIELD)),
+    }
+}
+
+/// Require an `Option<usize>` that is present and positive (> 0).
+/// Returns [`ERROR_MISSING_FIELD`] if `None`, [`ERROR_VALUE_OUT_OF_RANGE`] if zero.
+pub fn require_positive<'a>(
+    cmd: &Command<'a>,
+    field: Option<usize>,
+) -> Result<usize, Response<'a>> {
+    match field {
+        Some(v) if v > 0 => Ok(v),
+        Some(_) => Err(Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE)),
+        None => Err(Response::error(cmd.id, ERROR_MISSING_FIELD)),
+    }
+}
+
+/// Propagate a `Result<T, Response>` in a function that returns `Response` directly.
+///
+/// Evaluates to `T` on `Ok`, or immediately returns the `Response` on `Err`.
+/// Use this wherever `?` is unavailable because the enclosing function returns `Response`
+/// rather than `Result`.
+macro_rules! try_r {
+    ($e:expr) => {
+        match $e {
+            Ok(v) => v,
+            Err(r) => return r,
+        }
+    };
+}
+pub(crate) use try_r;
+
 /// Build a [`ResponseData::Bytes`] response, capping at `max_len` and the 64-byte heapless limit.
 pub fn bytes_response<'a>(id: &'a str, data: &[u8], max_len: usize) -> Response<'a> {
     let take = max_len.min(data.len()).min(64);

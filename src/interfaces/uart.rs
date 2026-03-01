@@ -3,6 +3,7 @@
 //! Supports `read`, `write`, and `configure` actions on UART0 or UART1.
 
 use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response};
+use super::try_r;
 
 /// UART configuration parameters, stored per-peripheral.
 #[derive(Clone, Debug, PartialEq)]
@@ -81,14 +82,8 @@ pub fn handle_configure<'a>(cmd: &Command<'a>) -> Result<UartConfig, Response<'a
 /// `configured` indicates whether the UART has been configured via `configure` first.
 /// The caller (router) is responsible for validating the peripheral index.
 pub fn handle_write<'a>(cmd: &Command<'a>, configured: bool) -> Response<'a> {
-    if let Err(r) = super::check_configured(cmd, configured) {
-        return r;
-    }
-    let _bytes = match &cmd.bytes {
-        Some(b) if !b.is_empty() => b,
-        Some(_) => return Response::error(cmd.id, ERROR_MISSING_FIELD),
-        None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
-    };
+    try_r!(super::check_configured(cmd, configured));
+    try_r!(super::require_bytes(cmd, cmd.bytes.as_ref()));
     // In the real firmware: write bytes to the UART peripheral
     Response::ok(cmd.id, None)
 }
@@ -101,17 +96,8 @@ pub fn handle_read_with_data<'a>(
     configured: bool,
     rx_data: &[u8],
 ) -> Response<'a> {
-    if let Err(r) = super::check_configured(cmd, configured) {
-        return r;
-    }
-    let _uart = match validate_uart(cmd) {
-        Ok(u) => u,
-        Err(r) => return r,
-    };
-    let len = match cmd.len {
-        Some(l) if l > 0 => l,
-        Some(_) => return Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE),
-        None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
-    };
+    try_r!(super::check_configured(cmd, configured));
+    try_r!(validate_uart(cmd));
+    let len = try_r!(super::require_positive(cmd, cmd.len));
     super::bytes_response(cmd.id, rx_data, len)
 }

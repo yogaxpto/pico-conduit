@@ -54,6 +54,18 @@ const CYW43_CLM: &[u8] = include_bytes!("../cyw43-firmware/43439A0_clm.bin");
 // ── Configuration constants ───────────────────────────────────────────────────
 /// TCP port for the JSON-over-TCP command interface.
 pub const TCP_PORT: u16 = 4242;
+
+// ── AP network constants ──────────────────────────────────────────────────────
+/// Gateway / DHCP server address for the AP captive-portal network.
+const AP_IP: [u8; 4] = [192, 168, 4, 1];
+/// DHCP-assigned client address (always the same; single-client AP).
+const DHCP_CLIENT_IP: [u8; 4] = [192, 168, 4, 2];
+/// Subnet mask for the /24 AP network.
+const SUBNET_MASK: [u8; 4] = [255, 255, 255, 0];
+/// AP gateway IP as a byte-string for HTTP host-header matching.
+const AP_IP_STR: &[u8] = b"192.168.4.1";
+/// Redirect target for the captive-portal.
+const AP_IP_URL: &[u8] = b"http://192.168.4.1/";
 const TCP_READ_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_RECONNECT_SECS: u16 = 600; // 10 minutes
 
@@ -578,7 +590,7 @@ async fn ap_mode(
     LED_SIGNAL.signal(LedState::Provisioning);
 
     // Embassy-net with static IP 192.168.4.1/24
-    let ap_ip = Ipv4Address::new(192, 168, 4, 1);
+    let ap_ip = Ipv4Address::new(AP_IP[0], AP_IP[1], AP_IP[2], AP_IP[3]);
     let config = Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(ap_ip, 24),
         gateway: Some(ap_ip),
@@ -694,16 +706,10 @@ fn build_dhcp_reply(req: &[u8], msg_type: u8) -> [u8; 300] {
     r[2] = 6; // hlen
     // xid
     r[4..8].copy_from_slice(&req[4..8]);
-    // yiaddr: 192.168.4.2
-    r[16] = 192;
-    r[17] = 168;
-    r[18] = 4;
-    r[19] = 2;
-    // siaddr: 192.168.4.1
-    r[20] = 192;
-    r[21] = 168;
-    r[22] = 4;
-    r[23] = 1;
+    // yiaddr: DHCP client address
+    r[16..20].copy_from_slice(&DHCP_CLIENT_IP);
+    // siaddr: DHCP server (gateway) address
+    r[20..24].copy_from_slice(&AP_IP);
     // chaddr (client MAC)
     let chaddr_len = req[2] as usize;
     if chaddr_len <= 16 && 28 + chaddr_len <= req.len() {
@@ -726,10 +732,7 @@ fn build_dhcp_reply(req: &[u8], msg_type: u8) -> [u8; 300] {
     // 54: server identifier
     r[p] = 54;
     r[p + 1] = 4;
-    r[p + 2] = 192;
-    r[p + 3] = 168;
-    r[p + 4] = 4;
-    r[p + 5] = 1;
+    r[p + 2..p + 6].copy_from_slice(&AP_IP);
     p += 6;
     // 51: lease time = 3600s = 0x00000E10
     r[p] = 51;
@@ -739,21 +742,15 @@ fn build_dhcp_reply(req: &[u8], msg_type: u8) -> [u8; 300] {
     r[p + 4] = 0x0E;
     r[p + 5] = 0x10;
     p += 6;
-    // 1: subnet mask 255.255.255.0
+    // 1: subnet mask
     r[p] = 1;
     r[p + 1] = 4;
-    r[p + 2] = 255;
-    r[p + 3] = 255;
-    r[p + 4] = 255;
-    r[p + 5] = 0;
+    r[p + 2..p + 6].copy_from_slice(&SUBNET_MASK);
     p += 6;
-    // 3: router 192.168.4.1
+    // 3: router (gateway)
     r[p] = 3;
     r[p + 1] = 4;
-    r[p + 2] = 192;
-    r[p + 3] = 168;
-    r[p + 4] = 4;
-    r[p + 5] = 1;
+    r[p + 2..p + 6].copy_from_slice(&AP_IP);
     p += 6;
     // END
     r[p] = 255;
@@ -932,11 +929,11 @@ async fn handle_http_request(
         }
     };
 
-    // Captive portal: redirect any request not targeting 192.168.4.1
+    // Captive portal: redirect any request not targeting the AP gateway
     if let Some(host) = extract_header(headers, b"Host")
-        && !host.starts_with(b"192.168.4.1")
+        && !host.starts_with(AP_IP_STR)
     {
-        send_redirect(socket, b"http://192.168.4.1/").await;
+        send_redirect(socket, AP_IP_URL).await;
         return;
     }
 

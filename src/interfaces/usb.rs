@@ -2,19 +2,15 @@
 //!
 //! Supports `read` and `write` actions on the USB CDC ACM virtual serial port.
 
-use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response};
+use crate::protocol::{Command, Response};
+use super::try_r;
 
 /// Handle a USB CDC `write` command.
 ///
 /// `configured` indicates whether the USB device stack is initialized and connected.
 pub fn handle_write<'a>(cmd: &Command<'a>, configured: bool) -> Response<'a> {
-    if let Err(r) = super::check_configured(cmd, configured) {
-        return r;
-    }
-    match &cmd.bytes {
-        Some(b) if !b.is_empty() => {}
-        _ => return Response::error(cmd.id, ERROR_MISSING_FIELD),
-    };
+    try_r!(super::check_configured(cmd, configured));
+    try_r!(super::require_bytes(cmd, cmd.bytes.as_ref()));
     // In the real firmware: write bytes to the USB CDC ACM class
     Response::ok(cmd.id, None)
 }
@@ -27,13 +23,7 @@ pub fn handle_read_with_data<'a>(
     configured: bool,
     rx_data: &[u8],
 ) -> Response<'a> {
-    if let Err(r) = super::check_configured(cmd, configured) {
-        return r;
-    }
-    let len = match cmd.len {
-        Some(l) if l > 0 => l,
-        Some(_) => return Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE),
-        None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
-    };
+    try_r!(super::check_configured(cmd, configured));
+    let len = try_r!(super::require_positive(cmd, cmd.len));
     super::bytes_response(cmd.id, rx_data, len)
 }
