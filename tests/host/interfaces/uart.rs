@@ -87,9 +87,7 @@ fn uart_configure_even_parity() {
 #[test]
 fn uart_write_unconfigured_returns_not_configured() {
     let mut cmd = make_uart_cmd("w1", "write", Some(0));
-    let mut bytes = heapless::Vec::new();
-    bytes.push(0x41).ok();
-    cmd.bytes = Some(bytes);
+    cmd.bytes = Some("QQ=="); // base64 for [0x41]
     let resp = handle_write(&cmd, false);
     assert!(!resp.ok);
     assert_eq!(resp.error, Some(ERROR_NOT_CONFIGURED));
@@ -98,9 +96,7 @@ fn uart_write_unconfigured_returns_not_configured() {
 #[test]
 fn uart_write_configured_succeeds() {
     let mut cmd = make_uart_cmd("w2", "write", Some(0));
-    let mut bytes = heapless::Vec::new();
-    bytes.extend_from_slice(b"Hi").ok();
-    cmd.bytes = Some(bytes);
+    cmd.bytes = Some("SGk="); // base64 for b"Hi"
     let resp = handle_write(&cmd, true);
     assert!(resp.ok, "configured write should succeed: {:?}", resp.error);
 }
@@ -122,7 +118,7 @@ fn uart_read_configured_returns_bytes() {
     assert!(resp.ok, "configured read should succeed: {:?}", resp.error);
     match resp.data {
         Some(ResponseData::Bytes { bytes }) => {
-            assert_eq!(bytes.as_slice(), &[0x48, 0x65, 0x6C]);
+            assert_eq!(bytes.0.as_slice(), &[0x48, 0x65, 0x6C]);
         }
         _ => panic!("expected Bytes response"),
     }
@@ -158,7 +154,7 @@ fn uart_configure_baud_zero_returns_error() {
 #[test]
 fn uart_write_empty_bytes_returns_missing_field() {
     let mut cmd = make_uart_cmd("ec2", "write", Some(0));
-    cmd.bytes = Some(heapless::Vec::new()); // empty
+    cmd.bytes = Some(""); // empty
     let resp = handle_write(&cmd, true);
     assert!(!resp.ok);
     assert_eq!(resp.error, Some(ERROR_MISSING_FIELD));
@@ -201,15 +197,19 @@ fn uart_configure_invalid_stop_bits() {
 }
 
 #[test]
-fn uart_read_caps_at_64_bytes() {
+fn uart_read_caps_at_payload_limit() {
     let mut cmd = make_uart_cmd("ec7", "read", Some(0));
-    cmd.len = Some(100);
-    let data = [0xAA; 80]; // more than 64 available
+    cmd.len = Some(600);
+    let data = [0xAA; 600]; // more than MAX_PAYLOAD_LEN available
     let resp = handle_read_with_data(&cmd, true, &data);
     assert!(resp.ok);
     match resp.data {
         Some(ResponseData::Bytes { bytes }) => {
-            assert_eq!(bytes.len(), 64, "read should be capped at 64 bytes");
+            assert_eq!(
+                bytes.0.len(),
+                pico_socketeer::protocol::MAX_PAYLOAD_LEN,
+                "read should be capped at MAX_PAYLOAD_LEN bytes"
+            );
         }
         _ => panic!("expected Bytes response"),
     }

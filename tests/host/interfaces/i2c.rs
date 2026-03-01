@@ -90,7 +90,7 @@ fn i2c_read_configured_returns_bytes() {
     assert!(resp.ok, "i2c read should succeed: {:?}", resp.error);
     match resp.data {
         Some(ResponseData::Bytes { bytes }) => {
-            assert_eq!(bytes.as_slice(), &[0x0F, 0x42]);
+            assert_eq!(bytes.0.as_slice(), &[0x0F, 0x42]);
         }
         _ => panic!("expected Bytes"),
     }
@@ -117,9 +117,7 @@ fn i2c_read_missing_addr_returns_missing_field() {
 #[test]
 fn i2c_write_configured_succeeds() {
     let mut cmd = make_i2c_cmd("w1", "write", Some(0), Some(0x20));
-    let mut bytes = heapless::Vec::new();
-    bytes.push(0xAA).ok();
-    cmd.bytes = Some(bytes);
+    cmd.bytes = Some("qg=="); // base64 for [0xAA]
     let resp = handle_write(&cmd, true);
     assert!(resp.ok, "i2c write should succeed: {:?}", resp.error);
 }
@@ -127,9 +125,7 @@ fn i2c_write_configured_succeeds() {
 #[test]
 fn i2c_write_unconfigured_returns_not_configured() {
     let mut cmd = make_i2c_cmd("w2", "write", Some(0), Some(0x20));
-    let mut bytes = heapless::Vec::new();
-    bytes.push(0x00).ok();
-    cmd.bytes = Some(bytes);
+    cmd.bytes = Some("AA=="); // base64 for [0x00]
     let resp = handle_write(&cmd, false);
     assert!(!resp.ok);
     assert_eq!(resp.error, Some(ERROR_NOT_CONFIGURED));
@@ -138,16 +134,14 @@ fn i2c_write_unconfigured_returns_not_configured() {
 #[test]
 fn i2c_write_read_configured_returns_read_bytes() {
     let mut cmd = make_i2c_cmd("wr1", "write_read", Some(0), Some(0x68));
-    let mut wb = heapless::Vec::new();
-    wb.push(0x00).ok(); // register address
-    cmd.write_bytes = Some(wb);
+    cmd.write_bytes = Some("AA=="); // base64 for [0x00] (register address)
     cmd.read_len = Some(2);
     let rx = [0x12, 0x34];
     let resp = handle_write_read(&cmd, true, &rx);
     assert!(resp.ok, "write_read should succeed: {:?}", resp.error);
     match resp.data {
         Some(ResponseData::Bytes { bytes }) => {
-            assert_eq!(bytes.as_slice(), &[0x12, 0x34]);
+            assert_eq!(bytes.0.as_slice(), &[0x12, 0x34]);
         }
         _ => panic!("expected Bytes"),
     }
@@ -175,7 +169,7 @@ fn i2c_configure_freq_zero_returns_error() {
 #[test]
 fn i2c_write_empty_bytes_returns_missing_field() {
     let mut cmd = make_i2c_cmd("ec2", "write", Some(0), Some(0x20));
-    cmd.bytes = Some(heapless::Vec::new()); // empty
+    cmd.bytes = Some(""); // empty
     let resp = handle_write(&cmd, true);
     assert!(!resp.ok);
     assert_eq!(resp.error, Some(ERROR_MISSING_FIELD));
@@ -193,9 +187,7 @@ fn i2c_read_len_zero_returns_error() {
 #[test]
 fn i2c_write_read_read_len_zero_returns_error() {
     let mut cmd = make_i2c_cmd("ec4", "write_read", Some(0), Some(0x68));
-    let mut wb = heapless::Vec::new();
-    wb.push(0x00).ok();
-    cmd.write_bytes = Some(wb);
+    cmd.write_bytes = Some("AA=="); // base64 for [0x00]
     cmd.read_len = Some(0);
     let resp = handle_write_read(&cmd, true, &[0x00]);
     assert!(!resp.ok);
@@ -203,15 +195,19 @@ fn i2c_write_read_read_len_zero_returns_error() {
 }
 
 #[test]
-fn i2c_read_caps_at_64_bytes() {
+fn i2c_read_caps_at_payload_limit() {
     let mut cmd = make_i2c_cmd("ec5", "read", Some(0), Some(0x48));
-    cmd.len = Some(100);
-    let data = [0xBB; 80]; // more than 64 available
+    cmd.len = Some(600);
+    let data = [0xBB; 600]; // more than MAX_PAYLOAD_LEN available
     let resp = handle_read(&cmd, true, &data);
     assert!(resp.ok);
     match resp.data {
         Some(ResponseData::Bytes { bytes }) => {
-            assert_eq!(bytes.len(), 64, "read should be capped at 64 bytes");
+            assert_eq!(
+                bytes.0.len(),
+                pico_socketeer::protocol::MAX_PAYLOAD_LEN,
+                "read should be capped at MAX_PAYLOAD_LEN bytes"
+            );
         }
         _ => panic!("expected Bytes response"),
     }

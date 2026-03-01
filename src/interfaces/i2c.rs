@@ -68,7 +68,7 @@ pub fn handle_read<'a>(cmd: &'a Command<'a>, configured: bool, rx_data: &[u8]) -
 pub fn handle_write<'a>(cmd: &Command<'a>, configured: bool) -> Response<'a> {
     try_r!(super::check_configured(cmd, configured));
     try_r!(validate_addr(cmd));
-    try_r!(super::require_bytes(cmd, cmd.bytes.as_ref()));
+    try_r!(super::decode_bytes(cmd, cmd.bytes));
     Response::ok(cmd.id, None)
 }
 
@@ -83,7 +83,7 @@ pub fn handle_write_read<'a>(
     try_r!(super::check_configured(cmd, configured));
     try_r!(validate_i2c(cmd));
     try_r!(validate_addr(cmd));
-    try_r!(super::require_bytes(cmd, cmd.write_bytes.as_ref()));
+    try_r!(super::decode_bytes(cmd, cmd.write_bytes));
     let read_len = try_r!(super::require_positive(cmd, cmd.read_len));
     super::bytes_response(cmd.id, rx_data, read_len)
 }

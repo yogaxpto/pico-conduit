@@ -33,8 +33,8 @@ pub fn is_pin_available(pin: u8) -> bool {
 }
 
 use crate::protocol::{
-    Command, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_VALUE_OUT_OF_RANGE, Response,
-    ResponseData,
+    Base64Bytes, Command, ERROR_INVALID_ENCODING, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED,
+    ERROR_VALUE_OUT_OF_RANGE, MAX_PAYLOAD_LEN, Response, ResponseData,
 };
 
 /// Validate an `Option<u8>` peripheral index field, returning [`ERROR_MISSING_FIELD`] if
@@ -63,15 +63,26 @@ pub fn check_configured<'a>(cmd: &Command<'a>, configured: bool) -> Result<(), R
     }
 }
 
-/// Require a non-empty bytes field; returns [`ERROR_MISSING_FIELD`] if absent or empty.
-pub fn require_bytes<'cmd, 'a>(
-    cmd: &'cmd Command<'a>,
-    field: Option<&'cmd heapless::Vec<u8, 64>>,
-) -> Result<&'cmd heapless::Vec<u8, 64>, Response<'a>> {
-    match field {
-        Some(b) if !b.is_empty() => Ok(b),
-        _ => Err(Response::error(cmd.id, ERROR_MISSING_FIELD)),
-    }
+/// Decode a base64-encoded bytes field, returning the raw bytes.
+///
+/// Returns [`ERROR_MISSING_FIELD`] if the field is absent or empty,
+/// [`ERROR_INVALID_ENCODING`] if the base64 is malformed.
+pub fn decode_bytes<'a>(
+    cmd: &Command<'a>,
+    field: Option<&str>,
+) -> Result<heapless::Vec<u8, MAX_PAYLOAD_LEN>, Response<'a>> {
+    let encoded = match field {
+        Some(s) if !s.is_empty() => s,
+        _ => return Err(Response::error(cmd.id, ERROR_MISSING_FIELD)),
+    };
+    let mut buf = [0u8; MAX_PAYLOAD_LEN];
+    let n = crate::base64::decode(encoded.as_bytes(), &mut buf)
+        .map_err(|_| Response::error(cmd.id, ERROR_INVALID_ENCODING))?;
+    let mut v = heapless::Vec::new();
+    // n <= MAX_PAYLOAD_LEN by construction, so extend_from_slice cannot fail.
+    v.extend_from_slice(&buf[..n])
+        .map_err(|_| Response::error(cmd.id, ERROR_INVALID_ENCODING))?;
+    Ok(v)
 }
 
 /// Require an `Option<usize>` that is present and positive (> 0).
@@ -102,10 +113,15 @@ macro_rules! try_r {
 }
 pub(crate) use try_r;
 
-/// Build a [`ResponseData::Bytes`] response, capping at `max_len` and the 64-byte heapless limit.
+/// Build a [`ResponseData::Bytes`] response, capping at `max_len` and the payload limit.
 pub fn bytes_response<'a>(id: &'a str, data: &[u8], max_len: usize) -> Response<'a> {
-    let take = max_len.min(data.len()).min(64);
+    let take = max_len.min(data.len()).min(MAX_PAYLOAD_LEN);
     let mut bytes = heapless::Vec::new();
     bytes.extend_from_slice(&data[..take]).ok();
-    Response::ok(id, Some(ResponseData::Bytes { bytes }))
+    Response::ok(
+        id,
+        Some(ResponseData::Bytes {
+            bytes: Base64Bytes(bytes),
+        }),
+    )
 }

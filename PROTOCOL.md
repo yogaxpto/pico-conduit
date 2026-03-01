@@ -10,7 +10,9 @@ response object terminated by `\n`. One connection handles one in-flight request
 
 - **Encoding:** UTF-8 JSON
 - **Delimiter:** `\n` (0x0A) — the newline terminates each message
-- **Maximum message size:** 512 bytes including the trailing newline
+- **Maximum message size:** 1024 bytes including the trailing newline
+- **Byte encoding:** All byte payloads (`bytes`, `write_bytes`) use standard base64 strings
+  (alphabet A–Z, a–z, 0–9, +, /; `=` padding). Maximum decoded payload: 512 bytes
 - **Single-connection:** the server accepts exactly one client at a time; the connection
   closes before a new `accept()` is issued
 - **Idle timeout:** the server closes an idle connection after **30 seconds** of inactivity
@@ -74,8 +76,8 @@ On error:
 | Action      | Additional fields | Response `data` |
 |-------------|-------------------|-----------------|
 | `configure` | `uart: 0\|1`, `baud: u32`, `data_bits: 5-9`, `parity: "none"\|"even"\|"odd"`, `stop_bits: 1\|2` | _(none)_ |
-| `write`     | `uart: 0\|1`, `bytes: [u8, ...]` | _(none)_ |
-| `read`      | `uart: 0\|1`, `len: usize` | `{"bytes": [...]}` |
+| `write`     | `uart: 0\|1`, `bytes: "<base64>"` | _(none)_ |
+| `read`      | `uart: 0\|1`, `len: usize` | `{"bytes": "<base64>"}` |
 
 ---
 
@@ -84,8 +86,8 @@ On error:
 | Action      | Additional fields | Response `data` |
 |-------------|-------------------|-----------------|
 | `configure` | `spi: 0\|1`, `freq_hz: u32`, `cpol: 0\|1`, `cpha: 0\|1` | _(none)_ |
-| `write`     | `spi: 0\|1`, `bytes: [u8, ...]` | _(none)_ |
-| `transfer`  | `spi: 0\|1`, `bytes: [u8, ...]` | `{"bytes": [...]}` |
+| `write`     | `spi: 0\|1`, `bytes: "<base64>"` | _(none)_ |
+| `transfer`  | `spi: 0\|1`, `bytes: "<base64>"` | `{"bytes": "<base64>"}` |
 
 ---
 
@@ -94,9 +96,9 @@ On error:
 | Action       | Additional fields | Response `data` |
 |--------------|-------------------|-----------------|
 | `configure`  | `i2c: 0\|1`, `freq_hz: u32` | _(none)_ |
-| `write`      | `i2c: 0\|1`, `addr: u8`, `bytes: [u8, ...]` | _(none)_ |
-| `read`       | `i2c: 0\|1`, `addr: u8`, `len: usize` | `{"bytes": [...]}` |
-| `write_read` | `i2c: 0\|1`, `addr: u8`, `write_bytes: [u8, ...]`, `read_len: usize` | `{"bytes": [...]}` |
+| `write`      | `i2c: 0\|1`, `addr: u8`, `bytes: "<base64>"` | _(none)_ |
+| `read`       | `i2c: 0\|1`, `addr: u8`, `len: usize` | `{"bytes": "<base64>"}` |
+| `write_read` | `i2c: 0\|1`, `addr: u8`, `write_bytes: "<base64>"`, `read_len: usize` | `{"bytes": "<base64>"}` |
 
 ---
 
@@ -125,8 +127,8 @@ Channel mapping: `0` = GPIO26, `1` = GPIO27, `2` = GPIO28, `3` = onboard tempera
 
 | Action  | Additional fields | Response `data` |
 |---------|-------------------|-----------------|
-| `write` | `bytes: [u8, ...]` | _(none)_ |
-| `read`  | `len: usize` | `{"bytes": [...]}` |
+| `write` | `bytes: "<base64>"` | _(none)_ |
+| `read`  | `len: usize` | `{"bytes": "<base64>"}` |
 
 ---
 
@@ -187,7 +189,7 @@ All error codes are lowercase snake_case `&str` values in the `"error"` field.
 |------|---------|
 | `missing_version` | `version` field absent |
 | `unsupported_version` | `version != 1` |
-| `msg_too_large` | Frame exceeds 512 bytes (including newline) |
+| `msg_too_large` | Frame exceeds 1024 bytes (including newline) |
 | `malformed_json` | JSON parse failure |
 | `missing_field` | Required field for the action is absent |
 | `unknown_interface` | `interface` value not recognised |
@@ -198,6 +200,7 @@ All error codes are lowercase snake_case `&str` values in the `"error"` field.
 | `not_configured` | Peripheral used before `configure` action |
 | `peripheral_busy` | Peripheral busy with another operation |
 | `peripheral_error` | Hardware-level error during operation |
+| `invalid_encoding` | Base64 `bytes` or `write_bytes` field is malformed |
 
 ---
 

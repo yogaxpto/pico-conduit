@@ -33,7 +33,13 @@ use serde::{Deserialize, Serialize};
 
 /// Maximum frame length in bytes (including the newline terminator).
 /// Commands exceeding this limit are rejected with `"error": "msg_too_large"`.
-pub const MAX_MSG_LEN: usize = 512;
+pub const MAX_MSG_LEN: usize = 1024;
+
+/// Maximum decoded byte payload (e.g. SPI/I2C/UART transfer data).
+pub const MAX_PAYLOAD_LEN: usize = 512;
+
+/// Maximum base64-encoded length of [`MAX_PAYLOAD_LEN`] bytes.
+pub const MAX_B64_LEN: usize = (MAX_PAYLOAD_LEN / 3 + 1) * 4;
 
 // --- Error code constants ---
 // All error strings are &'static str — part of the v1 protocol stability contract.
@@ -52,6 +58,7 @@ pub const ERROR_PIN_IN_USE: &str = "pin_in_use";
 pub const ERROR_NOT_CONFIGURED: &str = "not_configured";
 pub const ERROR_PERIPHERAL_BUSY: &str = "peripheral_busy";
 pub const ERROR_PERIPHERAL_ERROR: &str = "peripheral_error";
+pub const ERROR_INVALID_ENCODING: &str = "invalid_encoding";
 
 /// ADC channel selector.
 ///
@@ -134,8 +141,8 @@ pub struct Command<'a> {
     // --- UART ---
     /// UART peripheral index: 0 or 1.
     pub uart: Option<u8>,
-    /// Bytes to write (UART write, SPI transfer/write, I2C write).
-    pub bytes: Option<heapless::Vec<u8, 64>>,
+    /// Base64-encoded bytes to write (UART write, SPI transfer/write, I2C write).
+    pub bytes: Option<&'a str>,
     /// Number of bytes to read.
     pub len: Option<usize>,
     /// UART baud rate.
@@ -162,8 +169,8 @@ pub struct Command<'a> {
     pub i2c: Option<u8>,
     /// I2C device address.
     pub addr: Option<u8>,
-    /// I2C write_read: bytes to write before reading.
-    pub write_bytes: Option<heapless::Vec<u8, 64>>,
+    /// I2C write_read: base64-encoded bytes to write before reading.
+    pub write_bytes: Option<&'a str>,
     /// I2C write_read: number of bytes to read back.
     pub read_len: Option<usize>,
 
@@ -189,11 +196,28 @@ impl<'a> Command<'a> {
     }
 }
 
+/// A byte buffer that serializes as a base64 string.
+///
+/// Holds raw bytes internally; encoding happens during [`Serialize`].
+#[derive(Debug, PartialEq)]
+pub struct Base64Bytes(pub heapless::Vec<u8, MAX_PAYLOAD_LEN>);
+
+impl Serialize for Base64Bytes {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut buf = [0u8; MAX_B64_LEN];
+        let n = crate::base64::encode(&self.0, &mut buf);
+        // SAFETY: base64 output is always valid ASCII/UTF-8.
+        let encoded = core::str::from_utf8(&buf[..n]).unwrap();
+        serializer.serialize_str(encoded)
+    }
+}
+
 /// Response data payload for read operations.
 ///
 /// Write/set actions return `data: null`; read/transfer actions carry result data.
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)] // no_std: Box not available
 pub enum ResponseData {
     /// GPIO read result: `{"value": 0}` or `{"value": 1}`.
     GpioRead { value: u8 },
@@ -201,8 +225,8 @@ pub enum ResponseData {
     AdcRead { raw: u16, voltage: f32 },
     /// ADC temperature sensor: `{"celsius": 27.3}`.
     AdcTemp { celsius: f32 },
-    /// Byte array result (UART read, SPI transfer, I2C read): `{"bytes": [0x0F, 0x42]}`.
-    Bytes { bytes: heapless::Vec<u8, 64> },
+    /// Byte result (UART read, SPI transfer, I2C read): `{"bytes": "<base64>"}`.
+    Bytes { bytes: Base64Bytes },
     /// Config report: `{"ssid": "...", "ip": "...", "connected": true}`. Password never included.
     Config {
         ssid: heapless::String<32>,

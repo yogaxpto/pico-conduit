@@ -10,7 +10,11 @@
 //! networking glue (`src/net.rs`).
 
 #![no_std]
+// Response<'a> is large (~540 bytes) because it embeds Base64Bytes (up to 512-byte payload).
+// On no_std we cannot Box it, so allow the large-err lint crate-wide.
+#![allow(clippy::result_large_err)]
 
+pub mod base64;
 pub mod interfaces;
 pub mod led;
 pub mod protocol;

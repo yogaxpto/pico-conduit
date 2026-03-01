@@ -10,7 +10,7 @@ use crate::protocol::{Command, Response};
 /// `configured` indicates whether the USB device stack is initialized and connected.
 pub fn handle_write<'a>(cmd: &Command<'a>, configured: bool) -> Response<'a> {
     try_r!(super::check_configured(cmd, configured));
-    try_r!(super::require_bytes(cmd, cmd.bytes.as_ref()));
+    try_r!(super::decode_bytes(cmd, cmd.bytes));
     // In the real firmware: write bytes to the USB CDC ACM class
     Response::ok(cmd.id, None)
 }

@@ -70,7 +70,7 @@ pub fn handle_transfer<'a>(
 ) -> Response<'a> {
     try_r!(super::check_configured(cmd, configured));
     try_r!(validate_spi(cmd));
-    let mosi = try_r!(super::require_bytes(cmd, cmd.bytes.as_ref()));
+    let mosi = try_r!(super::decode_bytes(cmd, cmd.bytes));
     super::bytes_response(cmd.id, miso_data, mosi.len())
 }
 
@@ -79,6 +79,6 @@ pub fn handle_transfer<'a>(
 /// The caller (router) is responsible for validating the peripheral index.
 pub fn handle_write<'a>(cmd: &Command<'a>, configured: bool) -> Response<'a> {
     try_r!(super::check_configured(cmd, configured));
-    try_r!(super::require_bytes(cmd, cmd.bytes.as_ref()));
+    try_r!(super::decode_bytes(cmd, cmd.bytes));
     Response::ok(cmd.id, None)
 }

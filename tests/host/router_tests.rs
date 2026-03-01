@@ -207,11 +207,7 @@ fn dispatch_uart_configure_then_write() {
     // Write should now succeed
     let mut cmd = make_cmd("d5b", Some("uart"), Some("write"));
     cmd.uart = Some(0);
-    cmd.bytes = Some({
-        let mut v = heapless::Vec::new();
-        v.extend_from_slice(&[0x01, 0x02]).ok();
-        v
-    });
+    cmd.bytes = Some("AQI="); // base64 for [0x01, 0x02]
     let resp = dispatch(&cmd, ("uart", "write"), &mut state);
     assert!(resp.ok, "write after configure should succeed");
 }
@@ -221,11 +217,7 @@ fn dispatch_uart_write_before_configure() {
     let mut state = DeviceState::default();
     let mut cmd = make_cmd("d6", Some("uart"), Some("write"));
     cmd.uart = Some(0);
-    cmd.bytes = Some({
-        let mut v = heapless::Vec::new();
-        v.extend_from_slice(&[0x01]).ok();
-        v
-    });
+    cmd.bytes = Some("AQ=="); // base64 for [0x01]
     let resp = dispatch(&cmd, ("uart", "write"), &mut state);
     assert!(!resp.ok);
     assert_eq!(resp.error, Some(ERROR_NOT_CONFIGURED));
@@ -255,11 +247,7 @@ fn dispatch_spi_configure_then_write() {
     // Write should succeed
     let mut cmd = make_cmd("d7b", Some("spi"), Some("write"));
     cmd.spi = Some(0);
-    cmd.bytes = Some({
-        let mut v = heapless::Vec::new();
-        v.extend_from_slice(&[0xFF]).ok();
-        v
-    });
+    cmd.bytes = Some("/w=="); // base64 for [0xFF]
     let resp = dispatch(&cmd, ("spi", "write"), &mut state);
     assert!(resp.ok);
 }
@@ -289,11 +277,7 @@ fn dispatch_i2c_configure_then_write() {
     let mut cmd = make_cmd("d8b", Some("i2c"), Some("write"));
     cmd.i2c = Some(0);
     cmd.addr = Some(0x50);
-    cmd.bytes = Some({
-        let mut v = heapless::Vec::new();
-        v.extend_from_slice(&[0x00, 0x01]).ok();
-        v
-    });
+    cmd.bytes = Some("AAE="); // base64 for [0x00, 0x01]
     let resp = dispatch(&cmd, ("i2c", "write"), &mut state);
     assert!(resp.ok);
 }
@@ -374,11 +358,7 @@ fn dispatch_adc_read_missing_channel() {
 fn dispatch_usb_write_not_configured() {
     let mut state = DeviceState::default();
     let mut cmd = make_cmd("d14", Some("usb"), Some("write"));
-    cmd.bytes = Some({
-        let mut v = heapless::Vec::new();
-        v.extend_from_slice(&[0x41]).ok();
-        v
-    });
+    cmd.bytes = Some("QQ=="); // base64 for [0x41]
     let resp = dispatch(&cmd, ("usb", "write"), &mut state);
     assert!(!resp.ok);
     assert_eq!(resp.error, Some(ERROR_NOT_CONFIGURED));

@@ -1,3 +1,4 @@
+mod base64_tests;
 mod fixtures;
 mod interfaces;
 mod led_tests;

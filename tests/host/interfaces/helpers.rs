@@ -1,32 +1,40 @@
 use crate::fixtures::make_cmd;
-use pico_socketeer::interfaces::{require_bytes, require_positive};
-use pico_socketeer::protocol::{ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE};
+use pico_socketeer::interfaces::{decode_bytes, require_positive};
+use pico_socketeer::protocol::{
+    ERROR_INVALID_ENCODING, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE,
+};
 
 #[test]
-fn require_bytes_none_returns_missing_field() {
+fn decode_bytes_none_returns_missing_field() {
     let cmd = make_cmd("t1", None, None);
-    let res = require_bytes(&cmd, None);
+    let res = decode_bytes(&cmd, None);
     assert!(res.is_err());
     assert_eq!(res.unwrap_err().error, Some(ERROR_MISSING_FIELD));
 }
 
 #[test]
-fn require_bytes_empty_returns_missing_field() {
+fn decode_bytes_empty_returns_missing_field() {
     let cmd = make_cmd("t2", None, None);
-    let empty: heapless::Vec<u8, 64> = heapless::Vec::new();
-    let res = require_bytes(&cmd, Some(&empty));
+    let res = decode_bytes(&cmd, Some(""));
     assert!(res.is_err());
     assert_eq!(res.unwrap_err().error, Some(ERROR_MISSING_FIELD));
 }
 
 #[test]
-fn require_bytes_nonempty_returns_ok() {
+fn decode_bytes_valid_base64_returns_ok() {
     let cmd = make_cmd("t3", None, None);
-    let mut v: heapless::Vec<u8, 64> = heapless::Vec::new();
-    v.push(0xAB).unwrap();
-    let res = require_bytes(&cmd, Some(&v));
+    // "qw==" is base64 for [0xAB]
+    let res = decode_bytes(&cmd, Some("qw=="));
     assert!(res.is_ok());
     assert_eq!(res.unwrap()[0], 0xAB);
+}
+
+#[test]
+fn decode_bytes_invalid_base64_returns_invalid_encoding() {
+    let cmd = make_cmd("t3b", None, None);
+    let res = decode_bytes(&cmd, Some("!!!"));
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().error, Some(ERROR_INVALID_ENCODING));
 }
 
 #[test]

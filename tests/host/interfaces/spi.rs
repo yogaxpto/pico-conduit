@@ -74,15 +74,13 @@ fn spi_configure_invalid_cpol() {
 #[test]
 fn spi_transfer_configured_returns_miso_bytes() {
     let mut cmd = make_spi_cmd("t1", "transfer", Some(0));
-    let mut mosi = heapless::Vec::new();
-    mosi.extend_from_slice(&[0xDE, 0xAD]).ok();
-    cmd.bytes = Some(mosi);
+    cmd.bytes = Some("3q0="); // base64 for [0xDE, 0xAD]
     let miso = [0xBE, 0xEF];
     let resp = handle_transfer(&cmd, true, &miso);
     assert!(resp.ok, "transfer should succeed: {:?}", resp.error);
     match resp.data {
         Some(ResponseData::Bytes { bytes }) => {
-            assert_eq!(bytes.as_slice(), &[0xBE, 0xEF]);
+            assert_eq!(bytes.0.as_slice(), &[0xBE, 0xEF]);
         }
         _ => panic!("expected Bytes response"),
     }
@@ -91,9 +89,7 @@ fn spi_transfer_configured_returns_miso_bytes() {
 #[test]
 fn spi_transfer_unconfigured_returns_not_configured() {
     let mut cmd = make_spi_cmd("t2", "transfer", Some(0));
-    let mut bytes = heapless::Vec::new();
-    bytes.push(0x00).ok();
-    cmd.bytes = Some(bytes);
+    cmd.bytes = Some("AA=="); // base64 for [0x00]
     let resp = handle_transfer(&cmd, false, &[0x00]);
     assert!(!resp.ok);
     assert_eq!(resp.error, Some(ERROR_NOT_CONFIGURED));
@@ -110,9 +106,7 @@ fn spi_transfer_missing_bytes_returns_missing_field() {
 #[test]
 fn spi_write_configured_succeeds() {
     let mut cmd = make_spi_cmd("w1", "write", Some(1));
-    let mut bytes = heapless::Vec::new();
-    bytes.push(0xAB).ok();
-    cmd.bytes = Some(bytes);
+    cmd.bytes = Some("qw=="); // base64 for [0xAB]
     let resp = handle_write(&cmd, true);
     assert!(resp.ok, "spi write should succeed");
 }
@@ -120,9 +114,7 @@ fn spi_write_configured_succeeds() {
 #[test]
 fn spi_write_unconfigured_returns_not_configured() {
     let mut cmd = make_spi_cmd("w2", "write", Some(0));
-    let mut bytes = heapless::Vec::new();
-    bytes.push(0x00).ok();
-    cmd.bytes = Some(bytes);
+    cmd.bytes = Some("AA=="); // base64 for [0x00]
     let resp = handle_write(&cmd, false);
     assert!(!resp.ok);
     assert_eq!(resp.error, Some(ERROR_NOT_CONFIGURED));
@@ -150,7 +142,7 @@ fn spi_configure_invalid_cpha() {
 #[test]
 fn spi_transfer_empty_bytes_returns_missing_field() {
     let mut cmd = make_spi_cmd("ec3", "transfer", Some(0));
-    cmd.bytes = Some(heapless::Vec::new()); // empty
+    cmd.bytes = Some(""); // empty
     let resp = handle_transfer(&cmd, true, &[0x00]);
     assert!(!resp.ok);
     assert_eq!(resp.error, Some(ERROR_MISSING_FIELD));
@@ -160,16 +152,14 @@ fn spi_transfer_empty_bytes_returns_missing_field() {
 fn spi_transfer_mosi_longer_than_miso() {
     // MOSI has 4 bytes, MISO only 2 — response should have min(4, 2) = 2 bytes
     let mut cmd = make_spi_cmd("ec4", "transfer", Some(0));
-    let mut mosi = heapless::Vec::new();
-    mosi.extend_from_slice(&[0x01, 0x02, 0x03, 0x04]).ok();
-    cmd.bytes = Some(mosi);
+    cmd.bytes = Some("AQIDBA=="); // base64 for [0x01, 0x02, 0x03, 0x04]
     let miso = [0xAA, 0xBB];
     let resp = handle_transfer(&cmd, true, &miso);
     assert!(resp.ok);
     match resp.data {
         Some(ResponseData::Bytes { bytes }) => {
-            assert_eq!(bytes.len(), 2, "should return min(MOSI, MISO) bytes");
-            assert_eq!(bytes.as_slice(), &[0xAA, 0xBB]);
+            assert_eq!(bytes.0.len(), 2, "should return min(MOSI, MISO) bytes");
+            assert_eq!(bytes.0.as_slice(), &[0xAA, 0xBB]);
         }
         _ => panic!("expected Bytes response"),
     }

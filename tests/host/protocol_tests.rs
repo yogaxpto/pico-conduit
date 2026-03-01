@@ -1,9 +1,9 @@
 use pico_socketeer::protocol::{
-    AdcChannel, ERROR_INVALID_PIN, ERROR_MALFORMED_JSON, ERROR_MISSING_FIELD,
-    ERROR_MISSING_VERSION, ERROR_MSG_TOO_LARGE, ERROR_NOT_CONFIGURED, ERROR_PERIPHERAL_BUSY,
-    ERROR_PERIPHERAL_ERROR, ERROR_PIN_IN_USE, ERROR_UNKNOWN_ACTION, ERROR_UNKNOWN_INTERFACE,
-    ERROR_UNSUPPORTED_VERSION, ERROR_VALUE_OUT_OF_RANGE, FrameReader, MAX_MSG_LEN, Response,
-    ResponseData, parse_command, serialize_response,
+    AdcChannel, Base64Bytes, ERROR_INVALID_ENCODING, ERROR_INVALID_PIN, ERROR_MALFORMED_JSON,
+    ERROR_MISSING_FIELD, ERROR_MISSING_VERSION, ERROR_MSG_TOO_LARGE, ERROR_NOT_CONFIGURED,
+    ERROR_PERIPHERAL_BUSY, ERROR_PERIPHERAL_ERROR, ERROR_PIN_IN_USE, ERROR_UNKNOWN_ACTION,
+    ERROR_UNKNOWN_INTERFACE, ERROR_UNSUPPORTED_VERSION, ERROR_VALUE_OUT_OF_RANGE, FrameReader,
+    MAX_MSG_LEN, Response, ResponseData, parse_command, serialize_response,
 };
 
 // ----- Serialize / Deserialize round-trips -----
@@ -70,10 +70,9 @@ fn version_zero_returns_unsupported() {
 // ----- Frame size limits -----
 
 #[test]
-fn frame_exactly_512_bytes_is_accepted() {
-    // Build a valid JSON command that is exactly 512 bytes
-    // Base: {"version":1,"id":"X","interface":"gpio","action":"read","pin":0}
-    // len = 65. Pad "id" value to fill up to 512.
+fn frame_exactly_max_msg_len_is_accepted() {
+    // Build a valid JSON command that is exactly MAX_MSG_LEN bytes.
+    // Pad "id" value to fill up to MAX_MSG_LEN.
     let base = br#"{"version":1,"id":""#;
     let suffix = br#"","interface":"gpio","action":"read","pin":0}"#;
     let id_len = MAX_MSG_LEN - base.len() - suffix.len();
@@ -90,12 +89,12 @@ fn frame_exactly_512_bytes_is_accepted() {
     // Should NOT return msg_too_large — either ok or other parse error
     assert!(
         result != Err(ERROR_MSG_TOO_LARGE),
-        "512-byte frame should not return msg_too_large"
+        "{MAX_MSG_LEN}-byte frame should not return msg_too_large"
     );
 }
 
 #[test]
-fn frame_513_bytes_returns_msg_too_large() {
+fn frame_over_max_msg_len_returns_msg_too_large() {
     let buf = [b'x'; MAX_MSG_LEN + 1];
     let err = parse_command(&buf).unwrap_err();
     assert_eq!(err, ERROR_MSG_TOO_LARGE);
@@ -157,6 +156,7 @@ fn error_code_constants_match_strings() {
     assert_eq!(ERROR_NOT_CONFIGURED, "not_configured");
     assert_eq!(ERROR_PERIPHERAL_BUSY, "peripheral_busy");
     assert_eq!(ERROR_PERIPHERAL_ERROR, "peripheral_error");
+    assert_eq!(ERROR_INVALID_ENCODING, "invalid_encoding");
 }
 
 // ----- data field shapes for read operations -----
@@ -199,14 +199,17 @@ fn response_data_adc_temp_shape() {
 fn response_data_bytes_shape() {
     let mut bytes = heapless::Vec::new();
     bytes.extend_from_slice(&[0x48, 0x65, 0x6C]).ok();
-    let resp = Response::ok("b1", Some(ResponseData::Bytes { bytes }));
+    let resp = Response::ok(
+        "b1",
+        Some(ResponseData::Bytes {
+            bytes: Base64Bytes(bytes),
+        }),
+    );
     let mut buf = [0u8; 128];
     let n = serialize_response(&resp, &mut buf).unwrap();
     let s = core::str::from_utf8(&buf[..n]).unwrap();
-    assert!(
-        s.contains("\"bytes\":[72,101,108]"),
-        "bytes data shape: {s}"
-    );
+    // 0x48, 0x65, 0x6C = "Hel" → base64 "SGVs"
+    assert!(s.contains("\"bytes\":\"SGVs\""), "bytes data shape: {s}");
 }
 
 // ----- FrameReader -----
@@ -255,8 +258,8 @@ fn adc_channel_temp_deserialization() {
 // ----- FrameReader edge cases -----
 
 #[test]
-fn frame_reader_exactly_511_bytes_succeeds() {
-    // MAX_MSG_LEN=512 includes the newline, so 511 data bytes + \n is the max valid frame.
+fn frame_reader_exactly_max_data_bytes_succeeds() {
+    // MAX_MSG_LEN includes the newline, so (MAX_MSG_LEN-1) data bytes + \n is the max valid frame.
     let mut fr = FrameReader::new();
     for _ in 0..MAX_MSG_LEN - 1 {
         assert_eq!(fr.push(b'A').unwrap(), None);
@@ -264,7 +267,8 @@ fn frame_reader_exactly_511_bytes_succeeds() {
     let result = fr.push(b'\n').unwrap();
     assert!(
         result.is_some(),
-        "511 data bytes + newline should produce a valid frame"
+        "{} data bytes + newline should produce a valid frame",
+        MAX_MSG_LEN - 1
     );
     assert_eq!(result.unwrap().len(), MAX_MSG_LEN - 1);
 }
@@ -289,8 +293,8 @@ fn frame_reader_consecutive_frames() {
 #[test]
 fn frame_reader_overflow_recovery() {
     let mut fr = FrameReader::new();
-    // Push 520 bytes (triggers overflow after 511)
-    for _ in 0..520 {
+    // Push well past MAX_MSG_LEN bytes (triggers overflow after MAX_MSG_LEN-1)
+    for _ in 0..MAX_MSG_LEN + 100 {
         let _ = fr.push(b'x');
     }
     // Newline should return error (overflow)
@@ -338,6 +342,17 @@ fn adc_channel_negative_returns_malformed_json() {
     let json = br#"{"version":1,"id":"1","interface":"adc","action":"read","adc_channel":-1}"#;
     let err = parse_command(json).unwrap_err();
     assert_eq!(err, ERROR_MALFORMED_JSON);
+}
+
+// ----- Base64 bytes field parsing -----
+
+#[test]
+fn parse_command_with_base64_bytes() {
+    // "AQI=" is base64 for [1, 2]
+    let json =
+        br#"{"version":1,"id":"b1","interface":"spi","action":"write","spi":0,"bytes":"AQI="}"#;
+    let cmd = parse_command(json).unwrap();
+    assert_eq!(cmd.bytes, Some("AQI="));
 }
 
 // ----- Response serialization edge cases -----

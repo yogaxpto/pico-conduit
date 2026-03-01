@@ -83,7 +83,7 @@ pub fn handle_configure<'a>(cmd: &Command<'a>) -> Result<UartConfig, Response<'a
 /// The caller (router) is responsible for validating the peripheral index.
 pub fn handle_write<'a>(cmd: &Command<'a>, configured: bool) -> Response<'a> {
     try_r!(super::check_configured(cmd, configured));
-    try_r!(super::require_bytes(cmd, cmd.bytes.as_ref()));
+    try_r!(super::decode_bytes(cmd, cmd.bytes));
     // In the real firmware: write bytes to the UART peripheral
     Response::ok(cmd.id, None)
 }
