@@ -98,7 +98,18 @@ impl<'de> Deserialize<'de> for AdcChannel {
 /// A parsed command from a client.
 ///
 /// Borrows from the receive buffer — the buffer must be kept alive as long as the Command.
-/// Optional fields are present or absent depending on the `interface` and `action`.
+///
+/// # Field layout — partial-view pattern
+///
+/// All fields are `Option<T>` and are deserialized from a flat JSON object.
+/// Only fields relevant to the active `interface`/`action` pair will be `Some`;
+/// all others will be `None`. Interface handlers read only their own fields.
+/// The presence of irrelevant fields from other interfaces is intentional and
+/// carries zero runtime cost.
+///
+/// Do not split this struct: `serde-json-core` requires a single flat
+/// `Deserialize` impl for the wire format and has no reliable `flatten` support
+/// in `no_std` contexts.
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct Command<'a> {
     /// Protocol version — must be `Some(1)`. Missing → `missing_version`, other → `unsupported_version`.
