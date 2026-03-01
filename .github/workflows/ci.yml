@@ -28,7 +28,7 @@ jobs:
           cache-on-failure: true
           shared-key: embedded-release
 
-      - uses: cargo-bins/cargo-binstall@v1
+      - uses: cargo-bins/cargo-binstall@v1.17.6
       - name: Install flip-link
         run: cargo binstall flip-link --no-confirm --locked
 
@@ -73,7 +73,7 @@ jobs:
           cache-on-failure: true
           shared-key: embedded-release
 
-      - uses: cargo-bins/cargo-binstall@v1
+      - uses: cargo-bins/cargo-binstall@v1.17.6
       - name: Install flip-link
         run: cargo binstall flip-link --no-confirm --locked
 
@@ -121,7 +121,7 @@ jobs:
         with:
           name: firmware-elf
 
-      - uses: cargo-bins/cargo-binstall@v1
+      - uses: cargo-bins/cargo-binstall@v1.17.6
       - name: Install elf2uf2-rs
         run: cargo binstall elf2uf2-rs --no-confirm --locked
 
