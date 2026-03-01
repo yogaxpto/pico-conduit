@@ -98,7 +98,10 @@ fn saving_pattern_is_one_shot() {
 
 #[test]
 fn rebooting_pattern_is_one_shot() {
-    assert!(matches!(LedState::Rebooting.pattern(), LedPattern::OneShot(_)));
+    assert!(matches!(
+        LedState::Rebooting.pattern(),
+        LedPattern::OneShot(_)
+    ));
 }
 
 #[test]

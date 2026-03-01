@@ -3,8 +3,8 @@
 //! Supports `read`, `write`, `write_read`, and `configure` actions on I2C0 or I2C1.
 //! The I2C master operates at 100 kHz or 400 kHz.
 
-use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response};
 use super::try_r;
+use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response};
 
 /// I2C configuration parameters.
 #[derive(Clone, Debug, PartialEq)]

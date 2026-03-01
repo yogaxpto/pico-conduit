@@ -39,7 +39,7 @@ use embedded_io_async::Write as _;
 use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use static_cell::StaticCell;
 
-use pico_socketeer::led::{LedPattern, LedState, LED_SIGNAL};
+use pico_socketeer::led::{LED_SIGNAL, LedPattern, LedState};
 use pico_socketeer::protocol::{FrameReader, MAX_MSG_LEN, parse_command, serialize_response};
 use pico_socketeer::provisioning::portal::{
     Method, decode_url_encoded, make_ap_ssid, parse_connect_form, parse_request_line,

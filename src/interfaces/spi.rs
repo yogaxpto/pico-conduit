@@ -2,8 +2,8 @@
 //!
 //! Supports `transfer`, `write`, and `configure` actions on SPI0 or SPI1.
 
-use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response};
 use super::try_r;
+use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response};
 
 /// SPI configuration parameters.
 #[derive(Clone, Debug, PartialEq)]

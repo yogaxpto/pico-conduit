@@ -2,8 +2,8 @@
 //!
 //! Supports `read` and `write` actions on the USB CDC ACM virtual serial port.
 
-use crate::protocol::{Command, Response};
 use super::try_r;
+use crate::protocol::{Command, Response};
 
 /// Handle a USB CDC `write` command.
 ///

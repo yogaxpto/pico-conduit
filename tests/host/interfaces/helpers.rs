@@ -1,7 +1,5 @@
 use pico_socketeer::interfaces::{require_bytes, require_positive};
-use pico_socketeer::protocol::{
-    Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE,
-};
+use pico_socketeer::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE};
 
 fn dummy_cmd(id: &str) -> Command<'_> {
     Command {
