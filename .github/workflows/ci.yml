@@ -36,7 +36,7 @@ jobs:
         run: cargo clippy --target thumbv8m.main-none-eabihf -- -D warnings
 
       - name: Clippy (client crate)
-        run: cargo clippy -p pico-socketeer-client --target x86_64-unknown-linux-gnu -- -D warnings
+        run: cargo clippy -p pico-socketeer-client --target $(rustc -vV | sed -n 's/host: //p') -- -D warnings
 
   host-test:
     name: Host Tests
@@ -49,10 +49,10 @@ jobs:
           cache-on-failure: true
 
       - name: Host tests (Tier 1 + 2)
-        run: cargo test --test host --no-default-features --target x86_64-unknown-linux-gnu
+        run: cargo test --test host --no-default-features --target $(rustc -vV | sed -n 's/host: //p')
 
       - name: Client crate tests
-        run: cargo test -p pico-socketeer-client --target x86_64-unknown-linux-gnu
+        run: cargo test -p pico-socketeer-client --target $(rustc -vV | sed -n 's/host: //p')
 
   # ── Firmware build (gates on lint + tests passing) ─────────────────
   build-firmware:

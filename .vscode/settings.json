@@ -1,5 +1,4 @@
 {
     "rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf",
-    "rust-analyzer.cargo.features": [],
-    "rust-analyzer.checkOnSave.extraArgs": ["--target", "thumbv8m.main-none-eabihf"]
+    "rust-analyzer.cargo.features": []
 }

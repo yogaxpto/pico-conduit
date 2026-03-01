@@ -5,13 +5,12 @@
 	"build": {
 		"dockerfile": "Dockerfile.devcontainer"
 	},
-	"postCreateCommand": "rustup show",
+	"postCreateCommand": "rustup update stable --no-self-update && rustup component add rustfmt clippy rust-src && rustup target add thumbv8m.main-none-eabihf && rustup show && install-ra-vsix",
 	"forwardPorts": [4242],
 	"customizations": {
 		"vscode": {
 			"extensions": [
 				"fill-labs.dependi",
-				"rust-lang.rust-analyzer",
 				"tamasfe.even-better-toml",
 				"Anthropic.claude-code",
 				"probe-rs.probe-rs-debugger",
@@ -27,7 +26,7 @@
 			"settings": {
 				"rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf",
 				"rust-analyzer.cargo.features": [],
-				"rust-analyzer.checkOnSave.extraArgs": ["--target", "thumbv8m.main-none-eabihf"]
+				"rust-analyzer.server.path": "/usr/local/bin/rust-analyzer"
 			}
 		}
 	}

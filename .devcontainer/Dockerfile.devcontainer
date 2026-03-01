@@ -5,6 +5,7 @@ RUN --mount=type=cache,target=/var/cache/apk,sharing=locked \
     apk add \
         git \
         curl \
+        unzip \
         zsh \
         musl-dev \
         pkgconf \
@@ -29,3 +30,37 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     cargo install probe-rs-tools --locked \
     && cargo install flip-link --locked \
     && cargo install elf2uf2-rs --locked
+
+# Pre-download rust-analyzer VS Code extension VSIX.
+# The alpine-arm64 marketplace variant does not exist; VS Code Server's built-in downloader
+# also fails to decompress the HTTP gzip encoding. --compressed decodes it into a valid ZIP.
+# Installed via postCreateCommand rather than the extensions list to bypass the 404.
+RUN curl -fsSL --compressed \
+    "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/rust-lang/vsextensions/rust-analyzer/latest/vspackage" \
+    -o /usr/local/share/rust-analyzer.vsix
+
+# Install rust-analyzer via rustup — provides a musl-compatible binary that matches the
+# host toolchain (aarch64-unknown-linux-musl on Alpine ARM64).
+# Symlink to /usr/local/bin so the VS Code extension finds it via rust-analyzer.server.path.
+RUN rustup component add rust-analyzer \
+    && ln -s "$(rustup which rust-analyzer)" /usr/local/bin/rust-analyzer
+
+# Helper script: extracts the VSIX directly into ~/.vscode-server/extensions so VS Code
+# Server picks it up on first start without needing the `code` CLI or an IPC socket.
+RUN printf '%s\n' \
+    '#!/bin/sh' \
+    'set -e' \
+    'EXT_DIR="${HOME}/.vscode-server/extensions"' \
+    'VSIX="/usr/local/share/rust-analyzer.vsix"' \
+    'mkdir -p "${EXT_DIR}"' \
+    'T=$(mktemp -d)' \
+    'unzip -q "${VSIX}" -d "${T}"' \
+    'V=$(awk -F"\"" "/  \"version\":/{print \$4; exit}" "${T}/extension/package.json")' \
+    'DEST="${EXT_DIR}/rust-lang.rust-analyzer-${V}"' \
+    '[ -d "${DEST}" ] || mv "${T}/extension" "${DEST}"' \
+    'rm -rf "${T}"' \
+    > /usr/local/bin/install-ra-vsix \
+    && chmod +x /usr/local/bin/install-ra-vsix
+
+# Allow postCreateCommand to update or modify the toolchain as any container user.
+RUN chmod -R a+w /usr/local/rustup /usr/local/cargo
