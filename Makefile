@@ -1,14 +1,30 @@
 # ==============================================================================
 # pico-socketeer — Makefile
-# Raspberry Pi Pico 2W firmware (Embassy async, no_std, thumbv8m.main-none-eabihf)
+# Raspberry Pi Pico 2W / Pico W firmware (Embassy async, no_std)
 # ==============================================================================
+
+# ── Board selection (override: make build BOARD=pico1w) ─────────────────────
+
+BOARD           := pico2w
+
+ifeq ($(BOARD),pico1w)
+    CHIP            := RP2040
+    EMBEDDED_TARGET := thumbv6m-none-eabi
+    FLASH_MAX       := 2088960
+    CARGO_FEATURES  := --no-default-features --features embedded,pico1w
+else ifeq ($(BOARD),pico2w)
+    CHIP            := RP235x
+    EMBEDDED_TARGET := thumbv8m.main-none-eabihf
+    FLASH_MAX       := 4186112
+    CARGO_FEATURES  :=
+else
+    $(error Unknown BOARD=$(BOARD). Use pico2w or pico1w)
+endif
 
 # ── Variables (override on command line, e.g. make flash LOG_LEVEL=debug) ───
 
-CHIP            := RP235x
 LOG_LEVEL       := info
 PORT            := 4242
-EMBEDDED_TARGET := thumbv8m.main-none-eabihf
 HOST_TARGET     := $(shell rustc -vV | sed -n 's/host: //p')
 
 FIRMWARE_ELF    := target/$(EMBEDDED_TARGET)/release/pico-socketeer
@@ -17,9 +33,6 @@ FIRMWARE_UF2    := pico-socketeer.uf2
 
 CYW43_DIR       := cyw43-firmware
 CYW43_BASE      := https://raw.githubusercontent.com/embassy-rs/embassy/main/cyw43-firmware
-
-# Flash budget: 4 MB total minus 8 KB CREDENTIALS region (matches CI check)
-FLASH_MAX       := 4186112
 
 # ── Default target ───────────────────────────────────────────────────────────
 
@@ -31,7 +44,7 @@ FLASH_MAX       := 4186112
 .PHONY: setup setup-env setup-firmware setup-tools
 .PHONY: build build-release build-debug
 .PHONY: flash run run-debug uf2
-.PHONY: test test-host test-client test-integration
+.PHONY: test test-host test-board test-client test-integration
 .PHONY: lint fmt fmt-check clippy clippy-client
 .PHONY: size check-size
 .PHONY: ci debug clean
@@ -41,7 +54,7 @@ FLASH_MAX       := 4186112
 help:
 	@printf '\nUsage: make <target> [VARIABLE=value ...]\n'
 	@printf '\nVariables:\n'
-	@printf '  CHIP=RP235x          Probe-rs chip name (default: RP235x)\n'
+	@printf '  BOARD=pico2w         Board variant: pico2w (default) or pico1w\n'
 	@printf '  LOG_LEVEL=info       defmt log level: trace|debug|info|warn|error (default: info)\n'
 	@printf '  PORT=4242            TCP port the Pico listens on (default: 4242)\n'
 	@printf '  PICO_WIFI_SSID=...   Compile-time Wi-Fi SSID (optional, or use .env)\n'
@@ -62,8 +75,9 @@ help:
 	@printf '  run-debug            build-debug then flash via probe-rs\n'
 	@printf '  uf2                  build-release then convert to UF2 drag-and-drop image\n'
 	@printf '\nTest:\n'
-	@printf '  test                 Run test-host + test-client (no hardware needed)\n'
+	@printf '  test                 Run test-host + test-board + test-client (no hardware)\n'
 	@printf '  test-host            Tier 1+2 host unit/mock tests\n'
+	@printf '  test-board           Board-specific tests for both pico2w and pico1w\n'
 	@printf '  test-client          pico-socketeer-client crate tests\n'
 	@printf '  test-integration     Tier 4 TCP tests (requires PICO_IP=<ip>)\n'
 	@printf '\nLint:\n'
@@ -74,7 +88,7 @@ help:
 	@printf '  clippy-client        Clippy client crate (host target, -D warnings)\n'
 	@printf '\nSize / Budget:\n'
 	@printf '  size                 Print firmware section sizes (text/data/bss)\n'
-	@printf '  check-size           Verify firmware fits within flash budget (4 MB - 8 KB)\n'
+	@printf '  check-size           Verify firmware fits within flash budget\n'
 	@printf '\nCI:\n'
 	@printf '  ci                   Full local CI: fmt-check → clippy → test → build → check-size\n'
 	@printf '\nOther:\n'
@@ -115,10 +129,10 @@ setup-tools:
 build: build-release
 
 build-release:
-	DEFMT_LOG=$(LOG_LEVEL) cargo build --release --target $(EMBEDDED_TARGET)
+	DEFMT_LOG=$(LOG_LEVEL) cargo build --release --target $(EMBEDDED_TARGET) $(CARGO_FEATURES)
 
 build-debug:
-	DEFMT_LOG=$(LOG_LEVEL) cargo build --target $(EMBEDDED_TARGET)
+	DEFMT_LOG=$(LOG_LEVEL) cargo build --target $(EMBEDDED_TARGET) $(CARGO_FEATURES)
 
 # ── Flash / Run ──────────────────────────────────────────────────────────────
 
@@ -137,10 +151,14 @@ uf2: build-release
 
 # ── Test ─────────────────────────────────────────────────────────────────────
 
-test: test-host test-client
+test: test-host test-board test-client
 
 test-host:
 	cargo test --test host --no-default-features --target $(HOST_TARGET)
+
+test-board:
+	cargo test --test host --no-default-features --features pico2w --target $(HOST_TARGET)
+	cargo test --test host --no-default-features --features pico1w --target $(HOST_TARGET)
 
 test-client:
 	cargo test -p pico-socketeer-client --target $(HOST_TARGET)
@@ -164,7 +182,7 @@ fmt-check:
 	cargo fmt --all --check
 
 clippy:
-	cargo clippy --target $(EMBEDDED_TARGET) -- -D warnings
+	cargo clippy --release --target $(EMBEDDED_TARGET) $(CARGO_FEATURES) -- -D warnings
 
 clippy-client:
 	cargo clippy -p pico-socketeer-client --target $(HOST_TARGET) -- -D warnings
@@ -178,7 +196,7 @@ check-size: build-release
 	@TEXT=$$(size $(FIRMWARE_ELF) | awk 'NR==2 {print $$1}'); \
 	DATA=$$(size $(FIRMWARE_ELF) | awk 'NR==2 {print $$2}'); \
 	USED=$$(( TEXT + DATA )); \
-	echo "Flash budget : $(FLASH_MAX) bytes (4 MB - 8 KB credentials)"; \
+	echo "Flash budget : $(FLASH_MAX) bytes ($(BOARD))"; \
 	echo "Firmware size: $${USED} bytes  (text=$${TEXT}, data=$${DATA})"; \
 	echo "Remaining    : $$(( $(FLASH_MAX) - USED )) bytes"; \
 	if [ "$$USED" -gt "$(FLASH_MAX)" ]; then \
