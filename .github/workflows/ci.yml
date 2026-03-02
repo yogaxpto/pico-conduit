@@ -36,21 +36,30 @@ jobs:
         with:
           cache-on-failure: true
           shared-key: ${{ matrix.board }}
+          cache-all-crates: "true"
 
       - uses: cargo-bins/cargo-binstall@v1.17.6
       - name: Install flip-link
         run: |
-          cargo binstall flip-link --no-confirm --force
-          which flip-link
+          command -v flip-link || cargo binstall flip-link --no-confirm --force
+          flip-link --version
+
+      - name: Resolve host target
+        id: host
+        run: |
+          echo "triple=$(rustc -vV | sed -n 's/host: //p')" >> "$GITHUB_OUTPUT"
 
       - name: Compile embedded deps
         run: cargo build --release --target ${{ matrix.target }} ${{ matrix.cargo-features }} --lib
 
       - name: Compile host test deps
         run: |
-          HOST=$(rustc -vV | sed -n 's/host: //p')
-          cargo test --no-run --test host --no-default-features --target "$HOST"
-          cargo test --no-run --test host --no-default-features --features ${{ matrix.board }} --target "$HOST"
+          cargo test --no-run --test host --no-default-features --target "${{ steps.host.outputs.triple }}"
+          cargo test --no-run --test host --no-default-features --features ${{ matrix.board }} --target "${{ steps.host.outputs.triple }}"
+
+      - name: Compile client deps
+        if: matrix.board == 'pico2w'
+        run: cargo test --no-run -p pico-socketeer-client --target "${{ steps.host.outputs.triple }}"
 
   # ── Fast checks (run in parallel after build) ─────────────────────
   lint:
@@ -73,12 +82,18 @@ jobs:
         with:
           cache-on-failure: true
           shared-key: ${{ matrix.board }}
+          cache-all-crates: "true"
 
       - uses: cargo-bins/cargo-binstall@v1.17.6
       - name: Install flip-link
         run: |
-          cargo binstall flip-link --no-confirm --force
-          which flip-link
+          command -v flip-link || cargo binstall flip-link --no-confirm --force
+          flip-link --version
+
+      - name: Resolve host target
+        id: host
+        run: |
+          echo "triple=$(rustc -vV | sed -n 's/host: //p')" >> "$GITHUB_OUTPUT"
 
       - name: Format check
         if: matrix.board == 'pico2w'
@@ -89,8 +104,7 @@ jobs:
 
       - name: Clippy (client crate)
         if: matrix.board == 'pico2w'
-        run: |
-          cargo clippy -p pico-socketeer-client --target $(rustc -vV | sed -n 's/host: //p') -- -D warnings
+        run: cargo clippy -p pico-socketeer-client --target ${{ steps.host.outputs.triple }} -- -D warnings
 
   host-test:
     name: Test (${{ matrix.board }})
@@ -110,19 +124,23 @@ jobs:
         with:
           cache-on-failure: true
           shared-key: ${{ matrix.board }}
+          cache-all-crates: "true"
+
+      - name: Resolve host target
+        id: host
+        run: |
+          echo "triple=$(rustc -vV | sed -n 's/host: //p')" >> "$GITHUB_OUTPUT"
 
       - name: Host tests (board-independent)
-        run: |
-          cargo test --test host --no-default-features --target $(rustc -vV | sed -n 's/host: //p')
+        if: matrix.board == 'pico2w'
+        run: cargo test --test host --no-default-features --target ${{ steps.host.outputs.triple }}
 
       - name: Board-specific tests (${{ matrix.board }})
-        run: |
-          cargo test --test host --no-default-features ${{ matrix.cargo-features }} --target $(rustc -vV | sed -n 's/host: //p')
+        run: cargo test --test host --no-default-features ${{ matrix.cargo-features }} --target ${{ steps.host.outputs.triple }}
 
       - name: Client crate tests
         if: matrix.board == 'pico2w'
-        run: |
-          cargo test -p pico-socketeer-client --target $(rustc -vV | sed -n 's/host: //p')
+        run: cargo test -p pico-socketeer-client --target ${{ steps.host.outputs.triple }}
 
   # ── Firmware build (gates on lint + tests passing) ─────────────────
   build-firmware:
@@ -149,12 +167,13 @@ jobs:
         with:
           cache-on-failure: true
           shared-key: ${{ matrix.board }}
+          cache-all-crates: "true"
 
       - uses: cargo-bins/cargo-binstall@v1.17.6
       - name: Install flip-link
         run: |
-          cargo binstall flip-link --no-confirm --force
-          which flip-link
+          command -v flip-link || cargo binstall flip-link --no-confirm --force
+          flip-link --version
 
       - name: Build firmware (release)
         run: cargo build --release --target ${{ matrix.target }} ${{ matrix.cargo-features }}
