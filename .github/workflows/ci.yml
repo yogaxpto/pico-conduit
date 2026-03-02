@@ -16,9 +16,9 @@ env:
   CARGO_INCREMENTAL: "0"
 
 jobs:
-  # ── Fast checks (run in parallel) ──────────────────────────────────
-  lint:
-    name: Lint (${{ matrix.board }})
+  # ── Dependency pre-compilation (warms cache for downstream jobs) ───
+  build:
+    name: Build (${{ matrix.board }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -35,7 +35,44 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-          shared-key: embedded-${{ matrix.board }}
+          shared-key: ${{ matrix.board }}
+
+      - uses: cargo-bins/cargo-binstall@v1.17.6
+      - name: Install flip-link
+        run: |
+          cargo binstall flip-link --no-confirm --force
+          which flip-link
+
+      - name: Compile embedded deps
+        run: cargo build --release --target ${{ matrix.target }} ${{ matrix.cargo-features }} --lib
+
+      - name: Compile host test deps
+        run: |
+          HOST=$(rustc -vV | sed -n 's/host: //p')
+          cargo test --no-run --test host --no-default-features --target "$HOST"
+          cargo test --no-run --test host --no-default-features --features ${{ matrix.board }} --target "$HOST"
+
+  # ── Fast checks (run in parallel after build) ─────────────────────
+  lint:
+    name: Lint (${{ matrix.board }})
+    needs: [build]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - board: pico2w
+            target: thumbv8m.main-none-eabihf
+            cargo-features: ""
+          - board: pico1w
+            target: thumbv6m-none-eabi
+            cargo-features: "--no-default-features --features embedded,pico1w"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: ${{ matrix.board }}
 
       - uses: cargo-bins/cargo-binstall@v1.17.6
       - name: Install flip-link
@@ -57,6 +94,7 @@ jobs:
 
   host-test:
     name: Test (${{ matrix.board }})
+    needs: [build]
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -71,7 +109,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-          shared-key: test-${{ matrix.board }}
+          shared-key: ${{ matrix.board }}
 
       - name: Host tests (board-independent)
         run: |
@@ -110,7 +148,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-          shared-key: embedded-${{ matrix.board }}
+          shared-key: ${{ matrix.board }}
 
       - uses: cargo-bins/cargo-binstall@v1.17.6
       - name: Install flip-link
