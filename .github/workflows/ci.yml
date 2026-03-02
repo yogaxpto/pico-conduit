@@ -18,27 +18,38 @@ env:
 jobs:
   # ── Fast checks (run in parallel) ──────────────────────────────────
   lint:
-    name: Lint
+    name: Lint (${{ matrix.board }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - board: pico2w
+            target: thumbv8m.main-none-eabihf
+            cargo-features: ""
+          - board: pico1w
+            target: thumbv6m-none-eabi
+            cargo-features: "--no-default-features --features embedded,pico1w"
     steps:
       - uses: actions/checkout@v6
 
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-          shared-key: embedded-release
+          shared-key: embedded-${{ matrix.board }}
 
       - uses: cargo-bins/cargo-binstall@v1.17.6
       - name: Install flip-link
         run: cargo binstall flip-link --no-confirm --locked
 
       - name: Format check
+        if: matrix.board == 'pico2w'
         run: cargo fmt --all --check
 
       - name: Clippy (embedded firmware)
-        run: cargo clippy --release --target thumbv8m.main-none-eabihf -- -D warnings
+        run: cargo clippy --release --target ${{ matrix.target }} ${{ matrix.cargo-features }} -- -D warnings
 
       - name: Clippy (client crate)
+        if: matrix.board == 'pico2w'
         run: |
           cargo clippy -p pico-socketeer-client --target $(rustc -vV | sed -n 's/host: //p') -- -D warnings
 
@@ -56,43 +67,61 @@ jobs:
         run: |
           cargo test --test host --no-default-features --target $(rustc -vV | sed -n 's/host: //p')
 
+      - name: Board-specific tests (pico2w)
+        run: |
+          cargo test --test host --no-default-features --features pico2w --target $(rustc -vV | sed -n 's/host: //p')
+
+      - name: Board-specific tests (pico1w)
+        run: |
+          cargo test --test host --no-default-features --features pico1w --target $(rustc -vV | sed -n 's/host: //p')
+
       - name: Client crate tests
         run: |
           cargo test -p pico-socketeer-client --target $(rustc -vV | sed -n 's/host: //p')
 
   # ── Firmware build (gates on lint + tests passing) ─────────────────
   build-firmware:
-    name: Build Firmware
+    name: Build Firmware (${{ matrix.board }})
     needs: [lint, host-test]
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - board: pico2w
+            target: thumbv8m.main-none-eabihf
+            cargo-features: ""
+            flash-max: 4186112
+            flash-desc: "4 MB"
+          - board: pico1w
+            target: thumbv6m-none-eabi
+            cargo-features: "--no-default-features --features embedded,pico1w"
+            flash-max: 2088960
+            flash-desc: "2 MB"
     steps:
       - uses: actions/checkout@v6
 
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-          shared-key: embedded-release
+          shared-key: embedded-${{ matrix.board }}
 
       - uses: cargo-bins/cargo-binstall@v1.17.6
       - name: Install flip-link
         run: cargo binstall flip-link --no-confirm --locked
 
       - name: Build firmware (release)
-        run: cargo build --release --target thumbv8m.main-none-eabihf
+        run: cargo build --release --target ${{ matrix.target }} ${{ matrix.cargo-features }}
 
       - name: Verify firmware fits in flash
         run: |
-          # Pico 2W has 4 MB of flash. The top 8 KB is reserved for the
-          # CREDENTIALS region (sequential-storage), leaving 4088 KB for
-          # BOOT2 + firmware code/data.
-          FLASH_MAX=$(( 4096 * 1024 - 8 * 1024 ))   # 4,186,112 bytes
+          FLASH_MAX=${{ matrix.flash-max }}
 
-          FIRMWARE=target/thumbv8m.main-none-eabihf/release/pico-socketeer
+          FIRMWARE=target/${{ matrix.target }}/release/pico-socketeer
           TEXT=$(size "$FIRMWARE" | awk 'NR==2 {print $1}')
           DATA=$(size "$FIRMWARE" | awk 'NR==2 {print $2}')
           USED=$(( TEXT + DATA ))
 
-          echo "Flash budget : ${FLASH_MAX} bytes (4 MB − 8 KB credentials)"
+          echo "Flash budget : ${FLASH_MAX} bytes (${{ matrix.flash-desc }} − 8 KB credentials)"
           echo "Firmware size: ${USED} bytes  (text=${TEXT}, data=${DATA})"
           echo "Remaining    : $(( FLASH_MAX - USED )) bytes"
 
@@ -104,8 +133,8 @@ jobs:
       - name: Upload ELF artifact
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-elf
-          path: target/thumbv8m.main-none-eabihf/release/pico-socketeer
+          name: firmware-elf-${{ matrix.board }}
+          path: target/${{ matrix.target }}/release/pico-socketeer
           retention-days: 5
 
   # ── Release (only on version tags) ─────────────────────────────────
@@ -119,7 +148,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: firmware-elf
+          name: firmware-elf-pico2w
 
       - uses: cargo-bins/cargo-binstall@v1.17.6
       - name: Install elf2uf2-rs
