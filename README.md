@@ -1,13 +1,13 @@
 # pico-socketeer
 
-Rust firmware for the **Raspberry Pi Pico 2W** (RP2350 / CYW43439) that exposes a JSON-over-TCP
-socket server on port **4242**, allowing a remote client to read and write GPIO, UART, SPI, I2C,
-PWM, ADC, and USB peripherals.
+Rust firmware for the **Raspberry Pi Pico 2W** (RP2350 / CYW43439) and **Pico W** (RP2040 /
+CYW43439) that exposes a JSON-over-TCP socket server on port **4242**, allowing a remote client
+to read and write GPIO, UART, SPI, I2C, PWM, ADC, and USB peripherals.
 
 ## Hardware You Need
 
 > **Required hardware**
-> - Raspberry Pi **Pico 2W** (RP2350 + CYW43439) — not Pico 1, Pico W, or plain Pico 2
+> - Raspberry Pi **Pico 2W** (RP2350 + CYW43439) or **Pico W** (RP2040 + CYW43439)
 > - Data-capable USB-A → micro-USB cable (charge-only cables will not enumerate)
 > - 2.4 GHz 802.11n Wi-Fi access point (5 GHz not supported by CYW43439)
 > - Host machine with a USB port — no drivers needed for UF2 drag-and-drop
@@ -64,7 +64,8 @@ See [PROTOCOL.md](PROTOCOL.md) for the full command reference.
 | Tool | Version | Install |
 |------|---------|---------|
 | Rust (stable) | ≥ 1.85 | `rustup toolchain install stable` |
-| Embedded target | thumbv8m.main-none-eabihf | `rustup target add thumbv8m.main-none-eabihf` |
+| Embedded target (Pico 2W) | thumbv8m.main-none-eabihf | `rustup target add thumbv8m.main-none-eabihf` |
+| Embedded target (Pico W) | thumbv6m-none-eabi | `rustup target add thumbv6m-none-eabi` |
 | flip-link | latest | `cargo install flip-link` |
 | probe-rs | latest | `cargo install probe-rs-tools` |
 
@@ -82,8 +83,21 @@ curl -fsSL https://raw.githubusercontent.com/embassy-rs/embassy/main/cyw43-firmw
 curl -fsSL https://raw.githubusercontent.com/embassy-rs/embassy/main/cyw43-firmware/43439A0_clm.bin \
      -o cyw43-firmware/43439A0_clm.bin
 
-# Build firmware
+# Build firmware (Pico 2W — default)
+make build
+
+# Build firmware (Pico W)
+make build BOARD=pico1w
+```
+
+Or directly with cargo:
+
+```sh
+# Pico 2W
 cargo build --release --target thumbv8m.main-none-eabihf
+
+# Pico W
+cargo build --release --target thumbv6m-none-eabi --no-default-features --features embedded,pico1w
 ```
 
 ### Flash (probe-rs)
@@ -91,10 +105,15 @@ cargo build --release --target thumbv8m.main-none-eabihf
 Connect a debug probe (e.g. another Pico running picoprobe) and run:
 
 ```sh
+# Pico 2W
 cargo run --release --target thumbv8m.main-none-eabihf
+
+# Pico W
+cargo run --release --target thumbv6m-none-eabi --no-default-features --features embedded,pico1w
 ```
 
-The `.cargo/config.toml` runner is `probe-rs run --chip RP235x`.
+The `.cargo/config.toml` runner is `probe-rs run --chip RP235x` (Pico 2W) or
+`probe-rs run --chip RP2040` (Pico W).
 
 ### Run Host Tests (Tier 1 + 2)
 
@@ -124,6 +143,7 @@ src/
 ├── main.rs               # Embassy entry point — spawns tasks
 ├── net.rs                # CYW43 init, TCP server, LED driver (embedded-only)
 ├── lib.rs                # Library root (host + embedded)
+├── board.rs              # Board-specific constants (flash size, chip ID)
 ├── protocol.rs           # JSON serialisation / deserialisation, framing
 ├── router.rs             # Command dispatcher (interface + action validation)
 ├── led.rs                # LED state machine constants
