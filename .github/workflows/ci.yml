@@ -54,28 +54,33 @@ jobs:
           cargo clippy -p pico-socketeer-client --target $(rustc -vV | sed -n 's/host: //p') -- -D warnings
 
   host-test:
-    name: Host Tests
+    name: Test (${{ matrix.board }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - board: pico2w
+            cargo-features: "--features pico2w"
+          - board: pico1w
+            cargo-features: "--features pico1w"
     steps:
       - uses: actions/checkout@v6
 
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+          shared-key: test-${{ matrix.board }}
 
-      - name: Host tests (Tier 1 + 2)
+      - name: Host tests (board-independent)
         run: |
           cargo test --test host --no-default-features --target $(rustc -vV | sed -n 's/host: //p')
 
-      - name: Board-specific tests (pico2w)
+      - name: Board-specific tests (${{ matrix.board }})
         run: |
-          cargo test --test host --no-default-features --features pico2w --target $(rustc -vV | sed -n 's/host: //p')
-
-      - name: Board-specific tests (pico1w)
-        run: |
-          cargo test --test host --no-default-features --features pico1w --target $(rustc -vV | sed -n 's/host: //p')
+          cargo test --test host --no-default-features ${{ matrix.cargo-features }} --target $(rustc -vV | sed -n 's/host: //p')
 
       - name: Client crate tests
+        if: matrix.board == 'pico2w'
         run: |
           cargo test -p pico-socketeer-client --target $(rustc -vV | sed -n 's/host: //p')
 
