@@ -76,6 +76,27 @@ const CRED_MAGIC: u32 = 0xC0FF_EE42;
 /// Record layout: magic(4) + ssid_len(1) + pwd_len(1) + ssid(32) + pwd(64) = 102 bytes.
 const CRED_RECORD_SIZE: usize = 102;
 
+// ── Platform validation ──────────────────────────────────────────────────────
+
+/// Verify the firmware is running on the correct chip.
+///
+/// Reads the SYSINFO CHIP_ID register and panics on mismatch to prevent silent
+/// malfunction if firmware built for one board is flashed to the other.
+fn validate_platform() {
+    let chip_id = embassy_rp::pac::SYSINFO.chip_id().read();
+    let part = chip_id.part();
+
+    if let Err(msg) = pico_socketeer::board::validate_chip_part(part) {
+        defmt::panic!(
+            "{}: expected PART={=u16:#x}, got PART={=u16:#x}",
+            msg,
+            pico_socketeer::board::EXPECTED_CHIP_PART,
+            part
+        );
+    }
+    defmt::info!("platform validated: PART={=u16:#x}", part);
+}
+
 // ── Static storage (no heap) ──────────────────────────────────────────────────
 static STACK_RESOURCES_STA: StaticCell<StackResources<4>> = StaticCell::new();
 static STACK_RESOURCES_AP: StaticCell<StackResources<4>> = StaticCell::new();
@@ -282,6 +303,9 @@ fn backoff_duration(attempt: u8) -> Duration {
 /// Called from `main()`.  Performs factory-reset check, CYW43 init, then dispatches to STA or AP
 /// mode based on stored credentials.
 pub async fn start(spawner: Spawner, p: embassy_rp::Peripherals) {
+    // ── Platform validation ──────────────────────────────────────────────────
+    validate_platform();
+
     // ── Factory reset check ──────────────────────────────────────────────────
     // Use GPIO23 as Flex (input with pull-up) to sample the BOOTSEL line before
     // reconfiguring it as the CYW43 WL_ON output.

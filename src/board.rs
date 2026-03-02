@@ -16,3 +16,22 @@ pub const CRED_REGION_SIZE: usize = 8 * 1024;
 /// Credential storage flash offset (last 8 KB of flash).
 #[cfg(any(feature = "pico2w", feature = "pico1w"))]
 pub const CRED_FLASH_OFFSET: u32 = (FLASH_SIZE - CRED_REGION_SIZE) as u32;
+
+/// Expected SYSINFO CHIP_ID PART value for the active board.
+#[cfg(feature = "pico2w")]
+pub const EXPECTED_CHIP_PART: u16 = 0x4;
+/// Expected SYSINFO CHIP_ID PART value for the active board.
+#[cfg(feature = "pico1w")]
+pub const EXPECTED_CHIP_PART: u16 = 0x2;
+
+/// Validate that a SYSINFO CHIP_ID PART value matches the expected board.
+///
+/// Returns `Ok(())` on match, `Err` with diagnostic on mismatch.
+#[cfg(any(feature = "pico2w", feature = "pico1w"))]
+pub fn validate_chip_part(actual_part: u16) -> Result<(), &'static str> {
+    if actual_part == EXPECTED_CHIP_PART {
+        Ok(())
+    } else {
+        Err("platform mismatch: firmware built for wrong chip")
+    }
+}
