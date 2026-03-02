@@ -42,7 +42,7 @@ jobs:
       - name: Install flip-link
         run: |
           command -v flip-link || cargo binstall flip-link --no-confirm --force
-          flip-link --version
+          which flip-link
 
       - name: Resolve host target
         id: host
@@ -88,7 +88,7 @@ jobs:
       - name: Install flip-link
         run: |
           command -v flip-link || cargo binstall flip-link --no-confirm --force
-          flip-link --version
+          which flip-link
 
       - name: Resolve host target
         id: host
@@ -173,7 +173,7 @@ jobs:
       - name: Install flip-link
         run: |
           command -v flip-link || cargo binstall flip-link --no-confirm --force
-          flip-link --version
+          which flip-link
 
       - name: Build firmware (release)
         run: cargo build --release --target ${{ matrix.target }} ${{ matrix.cargo-features }}
