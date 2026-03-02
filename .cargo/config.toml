@@ -11,6 +11,16 @@ rustflags = [
     "-C", "target-cpu=cortex-m33",
 ]
 
+[target.thumbv6m-none-eabi]
+linker  = "flip-link"
+runner  = "probe-rs run --chip RP2040"
+rustflags = [
+    "-C", "link-arg=-Tlink.x",
+    "-C", "link-arg=--nmagic",
+    "-C", "link-arg=-Tdefmt.x",
+    "-C", "target-cpu=cortex-m0plus",
+]
+
 [env]
 # DEFMT_LOG controls log level; override with DEFMT_LOG=debug for verbose output
 DEFMT_LOG = "info"

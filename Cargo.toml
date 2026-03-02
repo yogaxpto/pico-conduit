@@ -12,8 +12,10 @@ license = "MIT"
 # embassy, cyw43, and other Cortex-M-only crates. Host tests pass --no-default-features
 # so the binary is silently skipped.
 [features]
-default = ["embedded"]
+default = ["embedded", "pico2w"]
 embedded = []
+pico2w = ["embassy-rp/rp235xa"]
+pico1w = ["embassy-rp/rp2040"]
 
 [[bin]]
 name = "pico-socketeer"
@@ -52,13 +54,12 @@ portable-atomic = { version = "1.5", features = ["critical-section"] }
 # All deps that require Cortex-M, RTT, PIO, or board-specific hardware go here.
 
 [target.'cfg(target_os = "none")'.dependencies]
-# Embassy async runtime and RP235x HAL
+# Embassy async runtime and RP HAL (chip variant selected by pico2w/pico1w feature)
 embassy-rp = { version = "0.9.0", features = [
     "defmt",
     "unstable-pac",
     "time-driver",
     "critical-section-impl",
-    "rp235xa",
     "binary-info",
 ] }
 embassy-executor = { version = "0.9.1", features = [

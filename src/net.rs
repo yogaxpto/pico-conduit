@@ -45,6 +45,7 @@ use pico_socketeer::provisioning::portal::{
     Method, decode_url_encoded, make_ap_ssid, parse_connect_form, parse_request_line,
 };
 use pico_socketeer::provisioning::storage::Credentials;
+use pico_socketeer::board::{CRED_FLASH_OFFSET, FLASH_SIZE};
 use pico_socketeer::router::{DeviceState, dispatch, validate_route};
 
 // ── CYW43 firmware blobs ──────────────────────────────────────────────────────
@@ -70,11 +71,6 @@ const TCP_READ_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_RECONNECT_SECS: u16 = 600; // 10 minutes
 
 // ── Flash credential storage constants ───────────────────────────────────────
-/// Pico 2W has 4 MB of flash.
-const FLASH_SIZE: usize = 4 * 1024 * 1024;
-/// The CREDENTIALS region occupies the last 8 KB of flash (see memory.x).
-/// Offset from flash base: 4 MB − 8 KB = 0x3FE000.
-const CRED_FLASH_OFFSET: u32 = (FLASH_SIZE - 8 * 1024) as u32;
 /// Magic sentinel stored in the first 4 bytes of a valid credential record.
 const CRED_MAGIC: u32 = 0xC0FF_EE42;
 /// Record layout: magic(4) + ssid_len(1) + pwd_len(1) + ssid(32) + pwd(64) = 102 bytes.
@@ -92,7 +88,7 @@ static FLASH_CELL: StaticCell<CredFlash> = StaticCell::new();
 /// # Safety
 ///
 /// `cyw43::Control` contains `Cell` and `RefCell` which are not `Sync`.  This is safe on a
-/// single-core RP2350 running Embassy's cooperative scheduler because:
+/// single-core RP2040/RP2350 running Embassy's cooperative scheduler because:
 /// 1. Only one async task runs at a time (cooperative, not preemptive).
 /// 2. `CriticalSectionRawMutex` disables IRQs, so no concurrent access is possible.
 struct ControlWrapper(cyw43::Control<'static>);
