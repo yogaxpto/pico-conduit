@@ -39,7 +39,9 @@ jobs:
 
       - uses: cargo-bins/cargo-binstall@v1.17.6
       - name: Install flip-link
-        run: cargo binstall flip-link --no-confirm --locked
+        run: |
+          cargo binstall flip-link --no-confirm --force
+          which flip-link
 
       - name: Format check
         if: matrix.board == 'pico2w'
@@ -112,7 +114,9 @@ jobs:
 
       - uses: cargo-bins/cargo-binstall@v1.17.6
       - name: Install flip-link
-        run: cargo binstall flip-link --no-confirm --locked
+        run: |
+          cargo binstall flip-link --no-confirm --force
+          which flip-link
 
       - name: Build firmware (release)
         run: cargo build --release --target ${{ matrix.target }} ${{ matrix.cargo-features }}
