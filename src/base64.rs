@@ -5,17 +5,38 @@
 
 const ENCODE_TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-/// Decode a single base64 ASCII byte to its 6-bit value, or 0xFF if invalid.
-const fn decode_byte(b: u8) -> u8 {
-    match b {
-        b'A'..=b'Z' => b - b'A',
-        b'a'..=b'z' => b - b'a' + 26,
-        b'0'..=b'9' => b - b'0' + 52,
-        b'+' => 62,
-        b'/' => 63,
-        _ => 0xFF,
+/// 256-byte lookup table: maps ASCII byte → 6-bit value (0–63), or 0xFF if invalid.
+/// Lives in `.rodata` (flash). Replaces a 5-branch match with a single indexed load.
+const DECODE_TABLE: [u8; 256] = {
+    let mut t = [0xFFu8; 256];
+    let mut i = 0u8;
+    loop {
+        t[(b'A' + i) as usize] = i;
+        if i == 25 {
+            break;
+        }
+        i += 1;
     }
-}
+    i = 0;
+    loop {
+        t[(b'a' + i) as usize] = i + 26;
+        if i == 25 {
+            break;
+        }
+        i += 1;
+    }
+    i = 0;
+    loop {
+        t[(b'0' + i) as usize] = i + 52;
+        if i == 9 {
+            break;
+        }
+        i += 1;
+    }
+    t[b'+' as usize] = 62;
+    t[b'/' as usize] = 63;
+    t
+};
 
 /// Encode `input` as base64 into `output`. Returns the number of bytes written.
 ///
@@ -23,42 +44,38 @@ const fn decode_byte(b: u8) -> u8 {
 ///
 /// Panics if `output` is too small. Required size: `(input.len() / 3 + 1) * 4`.
 pub fn encode(input: &[u8], output: &mut [u8]) -> usize {
-    let mut i = 0;
     let mut o = 0;
-    let len = input.len();
+    let chunks = input.chunks_exact(3);
+    let remainder = chunks.remainder();
 
-    // Process full 3-byte groups.
-    while i + 3 <= len {
-        let b0 = input[i] as u32;
-        let b1 = input[i + 1] as u32;
-        let b2 = input[i + 2] as u32;
-        let triple = (b0 << 16) | (b1 << 8) | b2;
-
+    for chunk in chunks {
+        let triple = (chunk[0] as u32) << 16 | (chunk[1] as u32) << 8 | chunk[2] as u32;
         output[o] = ENCODE_TABLE[((triple >> 18) & 0x3F) as usize];
         output[o + 1] = ENCODE_TABLE[((triple >> 12) & 0x3F) as usize];
         output[o + 2] = ENCODE_TABLE[((triple >> 6) & 0x3F) as usize];
         output[o + 3] = ENCODE_TABLE[(triple & 0x3F) as usize];
-
-        i += 3;
         o += 4;
     }
 
-    let remaining = len - i;
-    if remaining == 1 {
-        let b0 = input[i] as u32;
-        output[o] = ENCODE_TABLE[((b0 >> 2) & 0x3F) as usize];
-        output[o + 1] = ENCODE_TABLE[((b0 << 4) & 0x3F) as usize];
-        output[o + 2] = b'=';
-        output[o + 3] = b'=';
-        o += 4;
-    } else if remaining == 2 {
-        let b0 = input[i] as u32;
-        let b1 = input[i + 1] as u32;
-        output[o] = ENCODE_TABLE[((b0 >> 2) & 0x3F) as usize];
-        output[o + 1] = ENCODE_TABLE[(((b0 << 4) | (b1 >> 4)) & 0x3F) as usize];
-        output[o + 2] = ENCODE_TABLE[((b1 << 2) & 0x3F) as usize];
-        output[o + 3] = b'=';
-        o += 4;
+    match remainder.len() {
+        1 => {
+            let b0 = remainder[0] as u32;
+            output[o] = ENCODE_TABLE[((b0 >> 2) & 0x3F) as usize];
+            output[o + 1] = ENCODE_TABLE[((b0 << 4) & 0x3F) as usize];
+            output[o + 2] = b'=';
+            output[o + 3] = b'=';
+            o += 4;
+        }
+        2 => {
+            let b0 = remainder[0] as u32;
+            let b1 = remainder[1] as u32;
+            output[o] = ENCODE_TABLE[((b0 >> 2) & 0x3F) as usize];
+            output[o + 1] = ENCODE_TABLE[(((b0 << 4) | (b1 >> 4)) & 0x3F) as usize];
+            output[o + 2] = ENCODE_TABLE[((b1 << 2) & 0x3F) as usize];
+            output[o + 3] = b'=';
+            o += 4;
+        }
+        _ => {}
     }
 
     o
@@ -84,47 +101,51 @@ pub fn decode(input: &[u8], output: &mut [u8]) -> Result<usize, ()> {
         len
     };
 
-    let mut i = 0;
+    let data = &input[..stripped];
+    let chunks = data.chunks_exact(4);
+    let remainder = chunks.remainder();
     let mut o = 0;
 
-    // Process full 4-character groups.
-    while i + 4 <= stripped {
-        let a = decode_byte(input[i]);
-        let b = decode_byte(input[i + 1]);
-        let c = decode_byte(input[i + 2]);
-        let d = decode_byte(input[i + 3]);
-        if (a | b | c | d) == 0xFF {
+    for chunk in chunks {
+        let a = DECODE_TABLE[chunk[0] as usize];
+        let b = DECODE_TABLE[chunk[1] as usize];
+        let c = DECODE_TABLE[chunk[2] as usize];
+        let d = DECODE_TABLE[chunk[3] as usize];
+        if (a | b | c | d) & 0x80 != 0 {
             return Err(());
         }
         output[o] = (a << 2) | (b >> 4);
         output[o + 1] = (b << 4) | (c >> 2);
         output[o + 2] = (c << 6) | d;
-        i += 4;
         o += 3;
     }
 
-    let remaining = stripped - i;
-    if remaining == 2 {
-        let a = decode_byte(input[i]);
-        let b = decode_byte(input[i + 1]);
-        if (a | b) == 0xFF {
+    match remainder.len() {
+        2 => {
+            let a = DECODE_TABLE[remainder[0] as usize];
+            let b = DECODE_TABLE[remainder[1] as usize];
+            if (a | b) & 0x80 != 0 {
+                return Err(());
+            }
+            output[o] = (a << 2) | (b >> 4);
+            o += 1;
+        }
+        3 => {
+            let a = DECODE_TABLE[remainder[0] as usize];
+            let b = DECODE_TABLE[remainder[1] as usize];
+            let c = DECODE_TABLE[remainder[2] as usize];
+            if (a | b | c) & 0x80 != 0 {
+                return Err(());
+            }
+            output[o] = (a << 2) | (b >> 4);
+            output[o + 1] = (b << 4) | (c >> 2);
+            o += 2;
+        }
+        1 => {
+            // Single trailing character is invalid base64.
             return Err(());
         }
-        output[o] = (a << 2) | (b >> 4);
-        o += 1;
-    } else if remaining == 3 {
-        let a = decode_byte(input[i]);
-        let b = decode_byte(input[i + 1]);
-        let c = decode_byte(input[i + 2]);
-        if (a | b | c) == 0xFF {
-            return Err(());
-        }
-        output[o] = (a << 2) | (b >> 4);
-        output[o + 1] = (b << 4) | (c >> 2);
-        o += 2;
-    } else if remaining == 1 {
-        // Single trailing character is invalid base64.
-        return Err(());
+        _ => {}
     }
 
     Ok(o)
