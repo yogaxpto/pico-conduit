@@ -1,0 +1,78 @@
+# CI Docker image for pico-socketeer
+#
+# Contains the Rust toolchain, embedded targets, tools, and pre-compiled
+# dependency artifacts.  Downstream CI jobs use this as a container so they
+# start with deps ready — no cache restore or tool installation needed.
+#
+# The image is rebuilt automatically when dependency-defining files change
+# (Cargo.toml, Cargo.lock, rust-toolchain.toml, etc.).
+
+FROM rust:1-alpine
+
+# System deps:
+#   git       — required by actions/checkout inside container jobs
+#   binutils  — provides `size` (used in flash budget check)
+RUN apk add --no-cache git binutils
+
+# Rust targets and components
+RUN rustup target add thumbv8m.main-none-eabihf thumbv6m-none-eabi \
+    && rustup component add rustfmt clippy rust-src
+
+# Tools
+RUN cargo install cargo-binstall --locked \
+    && cargo binstall flip-link --no-confirm --force
+
+# ---------- Pre-compile dependencies using the "dummy source" trick ----------
+#
+# We copy only the files that define the dependency graph (Cargo.toml, etc.),
+# create minimal stub sources, and compile.  The local crate fails (stub code),
+# but all *dependency* .rlib artifacts land in /cache/target and are reused at
+# CI time via CARGO_TARGET_DIR=/cache/target.
+
+WORKDIR /tmp/deps
+
+# Dependency-defining files
+COPY Cargo.toml Cargo.lock rust-toolchain.toml build.rs ./
+COPY .cargo .cargo/
+COPY memory-pico2w.x memory-pico1w.x ./
+COPY client/Cargo.toml client/Cargo.toml
+COPY macros/Cargo.toml macros/Cargo.toml
+
+# Stub sources — just enough for cargo to resolve the build graph
+RUN mkdir -p src \
+    && echo '#![no_std]' > src/lib.rs \
+    && mkdir -p client/src \
+    && echo '' > client/src/lib.rs \
+    && mkdir -p macros/src \
+    && printf 'use proc_macro::TokenStream;\n#[proc_macro_attribute]\npub fn require_env(_: TokenStream, item: TokenStream) -> TokenStream { item }\n' > macros/src/lib.rs \
+    && mkdir -p tests/host tests/integration \
+    && echo 'fn main(){}' > tests/host/main.rs \
+    && echo 'fn main(){}' > tests/integration/main.rs
+
+# Pico2w embedded deps (release, default features)
+RUN cargo build --release --target thumbv8m.main-none-eabihf --lib \
+    --target-dir /cache/target 2>&1 || true
+
+# Pico1w embedded deps (release, pico1w feature)
+RUN cargo build --release --target thumbv6m-none-eabi \
+    --no-default-features --features embedded,pico1w --lib \
+    --target-dir /cache/target 2>&1 || true
+
+# Host test deps (all board variants)
+RUN HOST=$(rustc -vV | sed -n 's/host: //p') \
+    && cargo test --no-run --test host --no-default-features \
+       --target "$HOST" --target-dir /cache/target 2>&1 || true \
+    && cargo test --no-run --test host --no-default-features --features pico2w \
+       --target "$HOST" --target-dir /cache/target 2>&1 || true \
+    && cargo test --no-run --test host --no-default-features --features pico1w \
+       --target "$HOST" --target-dir /cache/target 2>&1 || true
+
+# Client crate deps
+RUN HOST=$(rustc -vV | sed -n 's/host: //p') \
+    && cargo test --no-run -p pico-socketeer-client \
+       --target "$HOST" --target-dir /cache/target 2>&1 || true
+
+# Clean up dummy source tree (keep only /cache/target)
+RUN rm -rf /tmp/deps
+
+WORKDIR /

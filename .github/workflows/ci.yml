@@ -14,58 +14,49 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
+  CARGO_TARGET_DIR: /cache/target
 
 jobs:
-  # ── Dependency pre-compilation (warms cache for downstream jobs) ───
+  # ── Build CI Docker image (pre-compiled deps for downstream jobs) ───
   build:
-    name: Build (${{ matrix.board }})
+    name: Build CI Image
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - board: pico2w
-            target: thumbv8m.main-none-eabihf
-            cargo-features: ""
-          - board: pico1w
-            target: thumbv6m-none-eabi
-            cargo-features: "--no-default-features --features embedded,pico1w"
+    permissions:
+      packages: write
+    outputs:
+      image: ghcr.io/${{ github.repository }}/ci:${{ github.sha }}
     steps:
       - uses: actions/checkout@v6
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
         with:
-          cache-on-failure: true
-          shared-key: ${{ matrix.board }}
-          cache-all-crates: "true"
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: cargo-bins/cargo-binstall@v1.17.6
-      - name: Install flip-link
-        run: |
-          command -v flip-link || cargo binstall flip-link --no-confirm --force
-          which flip-link
-
-      - name: Resolve host target
-        id: host
-        run: |
-          echo "triple=$(rustc -vV | sed -n 's/host: //p')" >> "$GITHUB_OUTPUT"
-
-      - name: Compile embedded deps
-        run: cargo build --release --target ${{ matrix.target }} ${{ matrix.cargo-features }} --lib
-
-      - name: Compile host test deps
-        run: |
-          cargo test --no-run --test host --no-default-features --target "${{ steps.host.outputs.triple }}"
-          cargo test --no-run --test host --no-default-features --features ${{ matrix.board }} --target "${{ steps.host.outputs.triple }}"
-
-      - name: Compile client deps
-        if: matrix.board == 'pico2w'
-        run: cargo test --no-run -p pico-socketeer-client --target "${{ steps.host.outputs.triple }}"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: .github/Dockerfile.ci
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/ci:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/ci:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   # ── Fast checks (run in parallel after build) ─────────────────────
   lint:
     name: Lint (${{ matrix.board }})
     needs: [build]
     runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.build.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     strategy:
       matrix:
         include:
@@ -77,18 +68,6 @@ jobs:
             cargo-features: "--no-default-features --features embedded,pico1w"
     steps:
       - uses: actions/checkout@v6
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          shared-key: ${{ matrix.board }}
-          cache-all-crates: "true"
-
-      - uses: cargo-bins/cargo-binstall@v1.17.6
-      - name: Install flip-link
-        run: |
-          command -v flip-link || cargo binstall flip-link --no-confirm --force
-          which flip-link
 
       - name: Resolve host target
         id: host
@@ -110,6 +89,11 @@ jobs:
     name: Test (${{ matrix.board }})
     needs: [build]
     runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.build.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     strategy:
       matrix:
         include:
@@ -119,12 +103,6 @@ jobs:
             cargo-features: "--features pico1w"
     steps:
       - uses: actions/checkout@v6
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          shared-key: ${{ matrix.board }}
-          cache-all-crates: "true"
 
       - name: Resolve host target
         id: host
@@ -145,8 +123,13 @@ jobs:
   # ── Firmware build (gates on lint + tests passing) ─────────────────
   build-firmware:
     name: Build Firmware (${{ matrix.board }})
-    needs: [lint, host-test]
+    needs: [build, lint, host-test]
     runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.build.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     strategy:
       matrix:
         include:
@@ -163,18 +146,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          shared-key: ${{ matrix.board }}
-          cache-all-crates: "true"
-
-      - uses: cargo-bins/cargo-binstall@v1.17.6
-      - name: Install flip-link
-        run: |
-          command -v flip-link || cargo binstall flip-link --no-confirm --force
-          which flip-link
-
       - name: Build firmware (release)
         run: cargo build --release --target ${{ matrix.target }} ${{ matrix.cargo-features }}
 
@@ -182,7 +153,7 @@ jobs:
         run: |
           FLASH_MAX=${{ matrix.flash-max }}
 
-          FIRMWARE=target/${{ matrix.target }}/release/pico-socketeer
+          FIRMWARE=${CARGO_TARGET_DIR}/${{ matrix.target }}/release/pico-socketeer
           TEXT=$(size "$FIRMWARE" | awk 'NR==2 {print $1}')
           DATA=$(size "$FIRMWARE" | awk 'NR==2 {print $2}')
           USED=$(( TEXT + DATA ))
@@ -200,7 +171,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: firmware-elf-${{ matrix.board }}
-          path: target/${{ matrix.target }}/release/pico-socketeer
+          path: /cache/target/${{ matrix.target }}/release/pico-socketeer
           retention-days: 5
 
   # ── Release (only on version tags) ─────────────────────────────────

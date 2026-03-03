@@ -21,7 +21,8 @@
 				"eamodio.gitlens",
 				"Gruntfuggly.todo-tree",
 				"hbenl.vscode-test-explorer",
-				"swellaby.vscode-rust-test-adapter"
+				"swellaby.vscode-rust-test-adapter",
+				"github.vscode-github-actions"
 			],
 			"settings": {
 				"rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf",
