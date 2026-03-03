@@ -21,15 +21,36 @@ RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master
 SHELL ["/bin/zsh", "-c"]
 ENV SHELL=/bin/zsh
 
-# Rust target for RP235x (Cortex-M33)
-RUN rustup target add thumbv8m.main-none-eabihf
+# Rust toolchain — targets + components driven by rust-toolchain.toml
+COPY rust-toolchain.toml /tmp/
+RUN cd /tmp && rustup show && rm /tmp/rust-toolchain.toml
 
-# Embedded tooling
+# cargo-binstall: pre-built binary (~2 seconds vs ~3-5 min compiling)
+RUN set -eux; \
+    ARCH=$(uname -m); \
+    case "$ARCH" in \
+      x86_64)  TRIPLE="x86_64-unknown-linux-musl" ;; \
+      aarch64) TRIPLE="aarch64-unknown-linux-musl" ;; \
+      *) echo "Unsupported: $ARCH" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-${TRIPLE}.tgz" \
+      | tar xz -C /usr/local/cargo/bin
+
+# Embedded tools — ordered cheapest → most expensive for layer cache efficiency.
+# If only flip-link updates, probe-rs and elf2uf2-rs layers stay cached.
+
+# flip-link: pre-built binary via binstall (~5 seconds)
+RUN cargo binstall flip-link --no-confirm --force
+
+# elf2uf2-rs: no pre-built musl binaries, compile from source (~2-3 min)
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
-    cargo install probe-rs-tools --locked \
-    && cargo install flip-link --locked \
-    && cargo install elf2uf2-rs --locked
+    cargo install elf2uf2-rs --locked
+
+# probe-rs-tools: no musl binaries, compile from source (~10-15 min)
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    cargo install probe-rs-tools --locked
 
 # Pre-download rust-analyzer VS Code extension VSIX.
 # The alpine-arm64 marketplace variant does not exist; VS Code Server's built-in downloader
@@ -39,11 +60,10 @@ RUN curl -fsSL --compressed \
     "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/rust-lang/vsextensions/rust-analyzer/latest/vspackage" \
     -o /usr/local/share/rust-analyzer.vsix
 
-# Install rust-analyzer via rustup — provides a musl-compatible binary that matches the
-# host toolchain (aarch64-unknown-linux-musl on Alpine ARM64).
-# Symlink to /usr/local/bin so the VS Code extension finds it via rust-analyzer.server.path.
+# Ensure rust-analyzer component is installed (rustup show may skip it if the
+# toolchain was already present) and symlink to /usr/local/bin for VS Code.
 RUN rustup component add rust-analyzer \
-    && ln -s "$(rustup which rust-analyzer)" /usr/local/bin/rust-analyzer
+    && ln -sf "$(rustup which rust-analyzer)" /usr/local/bin/rust-analyzer
 
 # Helper script: extracts the VSIX directly into ~/.vscode-server/extensions so VS Code
 # Server picks it up on first start without needing the `code` CLI or an IPC socket.

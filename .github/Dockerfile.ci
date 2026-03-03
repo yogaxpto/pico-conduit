@@ -12,15 +12,26 @@ FROM rust:1-alpine
 # System deps:
 #   git       — required by actions/checkout inside container jobs
 #   binutils  — provides `size` (used in flash budget check)
-RUN apk add --no-cache git binutils
+#   curl      — needed for cargo-binstall download
+RUN apk add --no-cache git binutils curl
 
-# Rust targets and components
-RUN rustup target add thumbv8m.main-none-eabihf thumbv6m-none-eabi \
-    && rustup component add rustfmt clippy rust-src
+# Rust targets and components (driven by rust-toolchain.toml)
+COPY rust-toolchain.toml /tmp/
+RUN cd /tmp && rustup show && rm /tmp/rust-toolchain.toml
+
+# cargo-binstall: pre-built binary (~2 seconds vs ~3-5 min compiling)
+RUN set -eux; \
+    ARCH=$(uname -m); \
+    case "$ARCH" in \
+      x86_64)  TRIPLE="x86_64-unknown-linux-musl" ;; \
+      aarch64) TRIPLE="aarch64-unknown-linux-musl" ;; \
+      *) echo "Unsupported: $ARCH" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-${TRIPLE}.tgz" \
+      | tar xz -C /usr/local/cargo/bin
 
 # Tools
-RUN cargo install cargo-binstall --locked \
-    && cargo binstall flip-link --no-confirm --force
+RUN cargo binstall flip-link --no-confirm --force
 
 # ---------- Pre-compile dependencies using the "dummy source" trick ----------
 #
@@ -49,6 +60,9 @@ RUN mkdir -p src \
     && echo 'fn main(){}' > tests/host/main.rs \
     && echo 'fn main(){}' > tests/integration/main.rs
 
+# Compute host triple once for all pre-compilation steps
+RUN echo "export HOST_TRIPLE=$(rustc -vV | sed -n 's/host: //p')" > /tmp/host-env.sh
+
 # Pico2w embedded deps (release, default features)
 RUN cargo build --release --target thumbv8m.main-none-eabihf --lib \
     --target-dir /cache/target 2>&1 || true
@@ -59,20 +73,20 @@ RUN cargo build --release --target thumbv6m-none-eabi \
     --target-dir /cache/target 2>&1 || true
 
 # Host test deps (all board variants)
-RUN HOST=$(rustc -vV | sed -n 's/host: //p') \
+RUN . /tmp/host-env.sh \
     && cargo test --no-run --test host --no-default-features \
-       --target "$HOST" --target-dir /cache/target 2>&1 || true \
+       --target "$HOST_TRIPLE" --target-dir /cache/target 2>&1 || true \
     && cargo test --no-run --test host --no-default-features --features pico2w \
-       --target "$HOST" --target-dir /cache/target 2>&1 || true \
+       --target "$HOST_TRIPLE" --target-dir /cache/target 2>&1 || true \
     && cargo test --no-run --test host --no-default-features --features pico1w \
-       --target "$HOST" --target-dir /cache/target 2>&1 || true
+       --target "$HOST_TRIPLE" --target-dir /cache/target 2>&1 || true
 
 # Client crate deps
-RUN HOST=$(rustc -vV | sed -n 's/host: //p') \
+RUN . /tmp/host-env.sh \
     && cargo test --no-run -p pico-socketeer-client \
-       --target "$HOST" --target-dir /cache/target 2>&1 || true
+       --target "$HOST_TRIPLE" --target-dir /cache/target 2>&1 || true
 
 # Clean up dummy source tree (keep only /cache/target)
-RUN rm -rf /tmp/deps
+RUN rm -rf /tmp/deps /tmp/host-env.sh
 
 WORKDIR /

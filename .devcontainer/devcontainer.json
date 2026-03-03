@@ -3,9 +3,10 @@
 {
 	"name": "Rust",
 	"build": {
-		"dockerfile": "Dockerfile.devcontainer"
+		"dockerfile": "Dockerfile.devcontainer",
+		"context": ".."
 	},
-	"postCreateCommand": "rustup update stable --no-self-update && rustup component add rustfmt clippy rust-src && rustup target add thumbv8m.main-none-eabihf && rustup show && install-ra-vsix",
+	"postCreateCommand": "rustup show && install-ra-vsix",
 	"forwardPorts": [4242],
 	"customizations": {
 		"vscode": {
