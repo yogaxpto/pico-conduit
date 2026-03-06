@@ -6,8 +6,12 @@
 		"dockerfile": "Dockerfile.devcontainer",
 		"context": ".."
 	},
+	"runArgs": ["--privileged", "-v", "/dev:/dev"],
 	"postCreateCommand": "rustup show && install-ra-vsix",
 	"forwardPorts": [4242],
+	"portsAttributes": {
+		"4242": { "label": "defmt RTT (probe-rs)" }
+	},
 	"customizations": {
 		"vscode": {
 			"extensions": [
@@ -15,7 +19,6 @@
 				"tamasfe.even-better-toml",
 				"Anthropic.claude-code",
 				"probe-rs.probe-rs-debugger",
-				"marus25.cortex-debug",
 				"usernamehw.errorlens",
 				"ZainChen.json",
 				"yzhang.markdown-all-in-one",
@@ -27,7 +30,8 @@
 			],
 			"settings": {
 				"rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf",
-				"rust-analyzer.cargo.features": [],
+				"rust-analyzer.cargo.allTargets": false,
+				"rust-analyzer.check.command": "clippy",
 				"rust-analyzer.server.path": "/usr/local/bin/rust-analyzer"
 			}
 		}
