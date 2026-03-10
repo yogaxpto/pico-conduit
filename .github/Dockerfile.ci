@@ -125,16 +125,19 @@ RUN rm -rf /tmp/deps
 # COPY the real source and compile all configurations.  Source changes invalidate
 # this layer, but dependency artifacts from the layers above remain cached.
 #
+# Disable sccache for source compilation — deps are already cached in
+# /cache/target and sccache credentials may not be available in this context.
+#
 # IMPORTANT: downstream CI jobs run with WORKDIR=/src and no actions/checkout,
 # so the cargo fingerprints (which embed the absolute source path) match.
+
+ENV RUSTC_WRAPPER=
 
 WORKDIR /src
 COPY . .
 
 # Embedded firmware: clippy + build for all 6 board×transport combinations
-RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
-    --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
-    set -e; \
+RUN set -e; \
     for ARGS in \
       "--release --target thumbv8m.main-none-eabihf" \
       "--release --target thumbv8m.main-none-eabihf --no-default-features --features embedded,pico2w,transport-websocket" \
@@ -148,9 +151,7 @@ RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
     done
 
 # Host tests: compile test binaries (don't run them)
-RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
-    --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
-    . /tmp/host-env.sh \
+RUN . /tmp/host-env.sh \
     && cargo test --no-run --test host --no-default-features \
        --target "$HOST_TRIPLE" --target-dir /cache/target \
     && cargo test --no-run --test host --no-default-features --features pico2w \
@@ -161,18 +162,11 @@ RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
        --target "$HOST_TRIPLE" --target-dir /cache/target
 
 # Client + host clippy
-RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
-    --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
-    . /tmp/host-env.sh \
+RUN . /tmp/host-env.sh \
     && cargo clippy -p pico-socketeer-client \
        --target "$HOST_TRIPLE" --target-dir /cache/target -- -D warnings
 
 RUN rm -f /tmp/host-env.sh
 
-# Unset sccache wrapper — downstream CI jobs use pre-compiled artifacts from
-# /cache/target and don't need (or have credentials for) sccache.
-ENV RUSTC_WRAPPER=
-
 # Downstream CI jobs run with WORKDIR=/src (source baked in from this commit).
 # No actions/checkout needed — cargo fingerprints match because the path is the same.
-WORKDIR /src
