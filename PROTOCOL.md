@@ -2,9 +2,10 @@
 
 ## Overview
 
-pico-socketeer exposes a newline-delimited JSON protocol over a TCP socket (port **4242**).
-Each request is a single JSON object terminated by `\n`. The server returns a single JSON
-response object terminated by `\n`. One connection handles one in-flight request at a time.
+pico-socketeer exposes a JSON command/response protocol over one of three compile-time
+selectable transports: **TCP** (default), **WebSocket**, or **MQTT**. The JSON schema,
+interface handlers, and error codes are identical across all transports — only the framing
+and connection management differ.
 
 ## Framing
 
@@ -201,6 +202,45 @@ All error codes are lowercase snake_case `&str` values in the `"error"` field.
 | `peripheral_busy` | Peripheral busy with another operation |
 | `peripheral_error` | Hardware-level error during operation |
 | `invalid_encoding` | Base64 `bytes` or `write_bytes` field is malformed |
+| `ws_handshake_failed` | WebSocket HTTP upgrade handshake failed (missing key, bad headers) |
+
+---
+
+## Transport: TCP (default)
+
+- **Port:** 4242
+- **Framing:** newline-delimited JSON (`\n` terminates each message)
+- **Connection model:** the server accepts exactly one client at a time
+- **Idle timeout:** 30 seconds of inactivity closes the connection
+
+Build with: `cargo build --release` (default features include `transport-tcp`)
+
+---
+
+## Transport: WebSocket
+
+- **Port:** 4243
+- **Framing:** WebSocket text frames (opcode 0x1); one JSON command per frame
+- **Connection model:** the server accepts exactly one client at a time
+- **Handshake:** standard HTTP/1.1 upgrade (RFC 6455)
+- **Masking:** client-to-server frames must be masked; server-to-client frames are unmasked
+- **Max payload:** 1024 bytes per frame
+- **Fragmentation:** not supported (single-frame messages only)
+- **Ping/Pong:** handled transparently by the server
+- **TLS:** not supported
+
+Build with:
+```sh
+cargo build --release --no-default-features --features embedded,pico2w,transport-websocket
+```
+
+### WebSocket example
+
+```sh
+websocat ws://<pico-ip>:4243
+{"version":1,"id":"1","interface":"gpio","action":"read","pin":0}
+# → {"id":"1","ok":true,"data":{"value":0},"error":null}
+```
 
 ---
 

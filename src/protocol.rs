@@ -59,6 +59,7 @@ pub const ERROR_NOT_CONFIGURED: &str = "not_configured";
 pub const ERROR_PERIPHERAL_BUSY: &str = "peripheral_busy";
 pub const ERROR_PERIPHERAL_ERROR: &str = "peripheral_error";
 pub const ERROR_INVALID_ENCODING: &str = "invalid_encoding";
+pub const ERROR_WEBSOCKET_HANDSHAKE: &str = "ws_handshake_failed";
 
 /// ADC channel selector.
 ///

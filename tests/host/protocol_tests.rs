@@ -2,8 +2,9 @@ use pico_socketeer::protocol::{
     AdcChannel, Base64Bytes, ERROR_INVALID_ENCODING, ERROR_INVALID_PIN, ERROR_MALFORMED_JSON,
     ERROR_MISSING_FIELD, ERROR_MISSING_VERSION, ERROR_MSG_TOO_LARGE, ERROR_NOT_CONFIGURED,
     ERROR_PERIPHERAL_BUSY, ERROR_PERIPHERAL_ERROR, ERROR_PIN_IN_USE, ERROR_UNKNOWN_ACTION,
-    ERROR_UNKNOWN_INTERFACE, ERROR_UNSUPPORTED_VERSION, ERROR_VALUE_OUT_OF_RANGE, FrameReader,
-    MAX_MSG_LEN, Response, ResponseData, parse_command, serialize_response,
+    ERROR_UNKNOWN_INTERFACE, ERROR_UNSUPPORTED_VERSION, ERROR_VALUE_OUT_OF_RANGE,
+    ERROR_WEBSOCKET_HANDSHAKE, FrameReader, MAX_MSG_LEN, Response, ResponseData, parse_command,
+    serialize_response,
 };
 
 // ----- Serialize / Deserialize round-trips -----
@@ -157,6 +158,7 @@ fn error_code_constants_match_strings() {
     assert_eq!(ERROR_PERIPHERAL_BUSY, "peripheral_busy");
     assert_eq!(ERROR_PERIPHERAL_ERROR, "peripheral_error");
     assert_eq!(ERROR_INVALID_ENCODING, "invalid_encoding");
+    assert_eq!(ERROR_WEBSOCKET_HANDSHAKE, "ws_handshake_failed");
 }
 
 // ----- data field shapes for read operations -----

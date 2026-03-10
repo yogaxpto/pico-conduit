@@ -67,6 +67,12 @@ jobs:
           - board: pico1w
             target: thumbv6m-none-eabi
             cargo-features: "--no-default-features --features embedded,pico1w,transport-tcp"
+          - board: pico2w-ws
+            target: thumbv8m.main-none-eabihf
+            cargo-features: "--no-default-features --features embedded,pico2w,transport-websocket"
+          - board: pico1w-ws
+            target: thumbv6m-none-eabi
+            cargo-features: "--no-default-features --features embedded,pico1w,transport-websocket"
     steps:
       - uses: actions/checkout@v6
 
@@ -142,6 +148,16 @@ jobs:
           - board: pico1w
             target: thumbv6m-none-eabi
             cargo-features: "--no-default-features --features embedded,pico1w,transport-tcp"
+            flash-max: 2088960
+            flash-desc: "2 MB"
+          - board: pico2w-ws
+            target: thumbv8m.main-none-eabihf
+            cargo-features: "--no-default-features --features embedded,pico2w,transport-websocket"
+            flash-max: 4186112
+            flash-desc: "4 MB"
+          - board: pico1w-ws
+            target: thumbv6m-none-eabi
+            cargo-features: "--no-default-features --features embedded,pico1w,transport-websocket"
             flash-max: 2088960
             flash-desc: "2 MB"
     steps:

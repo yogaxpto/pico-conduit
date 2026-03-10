@@ -17,6 +17,12 @@ pub const CRED_REGION_SIZE: usize = 8 * 1024;
 #[cfg(any(feature = "pico2w", feature = "pico1w"))]
 pub const CRED_FLASH_OFFSET: u32 = (FLASH_SIZE - CRED_REGION_SIZE) as u32;
 
+/// TCP port for the JSON-over-TCP command interface.
+pub const TCP_PORT: u16 = 4242;
+
+/// WebSocket port for the JSON-over-WebSocket command interface.
+pub const WS_PORT: u16 = 4243;
+
 /// Expected SYSINFO CHIP_ID PART value for the active board.
 #[cfg(feature = "pico2w")]
 pub const EXPECTED_CHIP_PART: u16 = 0x4;

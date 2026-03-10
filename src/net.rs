@@ -39,11 +39,13 @@ use embedded_io_async::Write as _;
 use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use static_cell::StaticCell;
 
+#[cfg(feature = "transport-tcp")]
+use pico_socketeer::board::TCP_PORT;
 use pico_socketeer::board::{CRED_FLASH_OFFSET, FLASH_SIZE};
 use pico_socketeer::led::{LED_SIGNAL, LedPattern, LedState};
-use pico_socketeer::protocol::{
-    FrameReader, MAX_MSG_LEN, parse_command, serialize_response,
-};
+#[cfg(feature = "transport-tcp")]
+use pico_socketeer::protocol::FrameReader;
+use pico_socketeer::protocol::{MAX_MSG_LEN, parse_command, serialize_response};
 use pico_socketeer::provisioning::portal::{
     Method, decode_url_encoded, make_ap_ssid, parse_connect_form, parse_request_line,
 };
@@ -54,10 +56,6 @@ use pico_socketeer::transport::{Transport, TransportError};
 // ── CYW43 firmware blobs ──────────────────────────────────────────────────────
 const CYW43_FW: &[u8] = include_bytes!("../cyw43-firmware/43439A0.bin");
 const CYW43_CLM: &[u8] = include_bytes!("../cyw43-firmware/43439A0_clm.bin");
-
-// ── Configuration constants ───────────────────────────────────────────────────
-/// TCP port for the JSON-over-TCP command interface.
-pub const TCP_PORT: u16 = 4242;
 
 // ── AP network constants ──────────────────────────────────────────────────────
 /// Gateway / DHCP server address for the AP captive-portal network.
@@ -82,11 +80,13 @@ const CRED_RECORD_SIZE: usize = 102;
 // ── TcpTransport ─────────────────────────────────────────────────────────────
 
 /// TCP transport — wraps a `TcpSocket` and uses `FrameReader` for newline-delimited framing.
+#[cfg(feature = "transport-tcp")]
 struct TcpTransport<'a, 'b> {
     socket: &'a mut TcpSocket<'b>,
     frame_reader: FrameReader,
 }
 
+#[cfg(feature = "transport-tcp")]
 impl<'a, 'b> TcpTransport<'a, 'b> {
     fn new(socket: &'a mut TcpSocket<'b>) -> Self {
         Self {
@@ -96,12 +96,12 @@ impl<'a, 'b> TcpTransport<'a, 'b> {
     }
 }
 
+#[cfg(feature = "transport-tcp")]
 impl Transport for TcpTransport<'_, '_> {
     async fn read_frame<'c>(&mut self, buf: &'c mut [u8]) -> Result<&'c [u8], TransportError> {
         let mut byte_buf = [0u8; 1];
         loop {
-            let read_result =
-                with_timeout(TCP_READ_TIMEOUT, self.socket.read(&mut byte_buf)).await;
+            let read_result = with_timeout(TCP_READ_TIMEOUT, self.socket.read(&mut byte_buf)).await;
             match read_result {
                 Err(_) => {
                     defmt::warn!("TCP read timeout — closing idle connection");
@@ -497,12 +497,24 @@ async fn sta_mode(spawner: Spawner, net_device: cyw43::NetDriver<'static>, creds
     }
     defmt::info!("wifi pm: power_save");
 
-    defmt::info!("Listening on TCP port {}", TCP_PORT);
-    tcp_server(stack, creds.ssid, config_ip).await;
+    #[cfg(feature = "transport-tcp")]
+    {
+        defmt::info!("Listening on TCP port {}", TCP_PORT);
+        tcp_server(stack, creds.ssid, config_ip).await;
+    }
+    #[cfg(feature = "transport-websocket")]
+    {
+        defmt::info!(
+            "Listening on WebSocket port {}",
+            pico_socketeer::board::WS_PORT
+        );
+        ws_server(stack, creds.ssid, config_ip).await;
+    }
 }
 
 // ── TCP server (STA mode) ─────────────────────────────────────────────────────
 
+#[cfg(feature = "transport-tcp")]
 async fn tcp_server(
     stack: Stack<'static>,
     config_ssid: heapless::String<32>,
@@ -573,6 +585,276 @@ async fn tcp_server(
                 }
 
                 defmt::warn!("reconnect attempt {} after {}s", reconnect_attempt, secs);
+                LED_SIGNAL.signal(LedState::Reconnecting);
+                Timer::after(backoff).await;
+                reconnect_attempt = reconnect_attempt.saturating_add(1);
+            }
+        }
+    }
+}
+
+// ── WebSocket transport (STA mode) ────────────────────────────────────────────
+
+/// WebSocket transport — wraps a `TcpSocket` after HTTP upgrade handshake.
+///
+/// Frames are WebSocket text frames (opcode 0x1). Ping/pong is handled
+/// transparently; close frames trigger `TransportError::Disconnected`.
+#[cfg(feature = "transport-websocket")]
+struct WsTransport<'a, 'b> {
+    socket: &'a mut TcpSocket<'b>,
+}
+
+#[cfg(feature = "transport-websocket")]
+impl WsTransport<'_, '_> {
+    /// Read exactly `buf.len()` bytes from the socket with timeout.
+    async fn read_exact(&mut self, buf: &mut [u8]) -> Result<(), TransportError> {
+        let mut offset = 0;
+        while offset < buf.len() {
+            match with_timeout(TCP_READ_TIMEOUT, self.socket.read(&mut buf[offset..])).await {
+                Err(_) => return Err(TransportError::Timeout),
+                Ok(Err(_)) => return Err(TransportError::Disconnected),
+                Ok(Ok(0)) => return Err(TransportError::Disconnected),
+                Ok(Ok(n)) => offset += n,
+            }
+        }
+        Ok(())
+    }
+}
+
+#[cfg(feature = "transport-websocket")]
+impl Transport for WsTransport<'_, '_> {
+    async fn read_frame<'c>(&mut self, buf: &'c mut [u8]) -> Result<&'c [u8], TransportError> {
+        use pico_socketeer::ws::{
+            OPCODE_CLOSE, OPCODE_PING, OPCODE_TEXT, encode_pong_frame, unmask,
+        };
+
+        loop {
+            // Read first 2 bytes of WS frame header
+            let mut hdr = [0u8; 2];
+            if let Err(e) = self.read_exact(&mut hdr).await {
+                self.socket.abort();
+                return Err(e);
+            }
+
+            let opcode = hdr[0] & 0x0F;
+            let masked = (hdr[1] & 0x80) != 0;
+            let len7 = (hdr[1] & 0x7F) as usize;
+
+            let payload_len = if len7 <= 125 {
+                len7
+            } else if len7 == 126 {
+                let mut ext = [0u8; 2];
+                if let Err(e) = self.read_exact(&mut ext).await {
+                    self.socket.abort();
+                    return Err(e);
+                }
+                ((ext[0] as usize) << 8) | (ext[1] as usize)
+            } else {
+                // 64-bit lengths not supported
+                self.socket.abort();
+                return Err(TransportError::Protocol(
+                    pico_socketeer::protocol::ERROR_MSG_TOO_LARGE,
+                ));
+            };
+
+            if payload_len > MAX_MSG_LEN {
+                self.socket.abort();
+                return Err(TransportError::Protocol(
+                    pico_socketeer::protocol::ERROR_MSG_TOO_LARGE,
+                ));
+            }
+
+            let mut mask_key = [0u8; 4];
+            if masked && let Err(e) = self.read_exact(&mut mask_key).await {
+                self.socket.abort();
+                return Err(e);
+            }
+
+            // Read payload
+            if payload_len > 0 {
+                if let Err(e) = self.read_exact(&mut buf[..payload_len]).await {
+                    self.socket.abort();
+                    return Err(e);
+                }
+                if masked {
+                    unmask(&mut buf[..payload_len], mask_key);
+                }
+            }
+
+            match opcode {
+                OPCODE_TEXT => return Ok(&buf[..payload_len]),
+                OPCODE_CLOSE => {
+                    // Send close frame back
+                    let _ = self.socket.write_all(&[0x88, 0x00]).await;
+                    self.socket.abort();
+                    return Err(TransportError::Disconnected);
+                }
+                OPCODE_PING => {
+                    // Respond with pong carrying the same payload
+                    let mut pong_buf = [0u8; 127];
+                    if let Ok(n) = encode_pong_frame(&buf[..payload_len], &mut pong_buf) {
+                        let _ = self.socket.write_all(&pong_buf[..n]).await;
+                    }
+                    continue;
+                }
+                _ => continue, // PONG and unknown opcodes: ignore
+            }
+        }
+    }
+
+    async fn write_frame(&mut self, data: &[u8]) -> Result<(), TransportError> {
+        let mut hdr = [0u8; 4];
+        let hdr_len = pico_socketeer::ws::encode_text_frame_header(data.len(), &mut hdr)
+            .map_err(TransportError::Protocol)?;
+
+        if self.socket.write_all(&hdr[..hdr_len]).await.is_err() {
+            self.socket.abort();
+            return Err(TransportError::Disconnected);
+        }
+        if self.socket.write_all(data).await.is_err() {
+            self.socket.abort();
+            return Err(TransportError::Disconnected);
+        }
+        Ok(())
+    }
+}
+
+/// Perform the WebSocket HTTP upgrade handshake on an accepted TCP socket.
+///
+/// Reads HTTP headers, validates the `Upgrade: websocket` request, computes
+/// `Sec-WebSocket-Accept`, and sends the HTTP 101 response.
+#[cfg(feature = "transport-websocket")]
+async fn ws_handshake(socket: &mut TcpSocket<'_>) -> Result<(), TransportError> {
+    use pico_socketeer::protocol::ERROR_WEBSOCKET_HANDSHAKE;
+
+    let mut hdr_buf = [0u8; 512];
+    let n = read_http_headers(socket, &mut hdr_buf).await;
+    if n == 0 {
+        return Err(TransportError::Disconnected);
+    }
+    let headers = &hdr_buf[..n];
+
+    // Validate Upgrade header
+    let upgrade = extract_header(headers, b"Upgrade");
+    if !matches!(upgrade, Some(v) if v.eq_ignore_ascii_case(b"websocket")) {
+        return Err(TransportError::Protocol(ERROR_WEBSOCKET_HANDSHAKE));
+    }
+
+    // Extract Sec-WebSocket-Key
+    let key = extract_header(headers, b"Sec-WebSocket-Key")
+        .ok_or(TransportError::Protocol(ERROR_WEBSOCKET_HANDSHAKE))?;
+    // Trim trailing whitespace/CR
+    let key = key.strip_suffix(b"\r").unwrap_or(key);
+    let key = key.strip_suffix(b" ").unwrap_or(key);
+
+    // Compute accept key
+    let mut accept = [0u8; 28];
+    let accept_len = pico_socketeer::ws::compute_accept_key(key, &mut accept);
+
+    // Build HTTP 101 Switching Protocols response
+    let mut resp = [0u8; 160];
+    let mut pos = 0;
+    macro_rules! push {
+        ($src:expr) => {
+            for &b in $src {
+                if pos < resp.len() {
+                    resp[pos] = b;
+                    pos += 1;
+                }
+            }
+        };
+    }
+    push!(b"HTTP/1.1 101 Switching Protocols\r\n");
+    push!(b"Upgrade: websocket\r\n");
+    push!(b"Connection: Upgrade\r\n");
+    push!(b"Sec-WebSocket-Accept: ");
+    push!(&accept[..accept_len]);
+    push!(b"\r\n\r\n");
+
+    if socket.write_all(&resp[..pos]).await.is_err() {
+        return Err(TransportError::Disconnected);
+    }
+
+    Ok(())
+}
+
+#[cfg(feature = "transport-websocket")]
+async fn ws_server(
+    stack: Stack<'static>,
+    config_ssid: heapless::String<32>,
+    config_ip: heapless::String<16>,
+) {
+    let mut rx_buf = [0u8; MAX_MSG_LEN];
+    let mut tx_buf = [0u8; MAX_MSG_LEN];
+    let mut socket = TcpSocket::new(stack, &mut rx_buf, &mut tx_buf);
+
+    let mut reconnect_attempt: u8 = 0;
+    let mut total_offline_secs: u16 = 0;
+
+    loop {
+        LED_SIGNAL.signal(LedState::Connected);
+
+        defmt::info!("accept() on WS port {}", pico_socketeer::board::WS_PORT);
+        match socket
+            .accept(IpListenEndpoint {
+                addr: None,
+                port: pico_socketeer::board::WS_PORT,
+            })
+            .await
+        {
+            Ok(()) => {
+                {
+                    let mut ctrl = CONTROL_MUTEX.lock().await;
+                    if let Some(c) = ctrl.as_mut() {
+                        c.set_power_management(cyw43::PowerManagementMode::None)
+                            .await;
+                    }
+                }
+                defmt::info!("WS client connected");
+                reconnect_attempt = 0;
+                total_offline_secs = 0;
+
+                // Perform WebSocket handshake, then run handle_client
+                match ws_handshake(&mut socket).await {
+                    Ok(()) => {
+                        let mut transport = WsTransport {
+                            socket: &mut socket,
+                        };
+                        handle_client(&mut transport, &config_ssid, &config_ip).await;
+                    }
+                    Err(_) => {
+                        defmt::warn!("WebSocket handshake failed");
+                    }
+                }
+
+                socket.abort();
+
+                {
+                    let mut ctrl = CONTROL_MUTEX.lock().await;
+                    if let Some(c) = ctrl.as_mut() {
+                        c.set_power_management(cyw43::PowerManagementMode::PowerSave)
+                            .await;
+                    }
+                }
+                defmt::info!("WS client disconnected");
+            }
+            Err(e) => {
+                defmt::warn!("WS accept() error: {:?}", e);
+                socket.abort();
+
+                let backoff = backoff_duration(reconnect_attempt);
+                let secs = backoff.as_secs();
+                total_offline_secs = total_offline_secs.saturating_add(secs as u16);
+
+                if total_offline_secs >= MAX_RECONNECT_SECS {
+                    defmt::error!("WS connection failed 10 min — SOS");
+                    loop {
+                        LED_SIGNAL.signal(LedState::Error);
+                        Timer::after_secs(30).await;
+                    }
+                }
+
+                defmt::warn!("WS reconnect attempt {} after {}s", reconnect_attempt, secs);
                 LED_SIGNAL.signal(LedState::Reconnecting);
                 Timer::after(backoff).await;
                 reconnect_attempt = reconnect_attempt.saturating_add(1);
