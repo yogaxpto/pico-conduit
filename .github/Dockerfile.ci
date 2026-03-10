@@ -30,8 +30,14 @@ RUN set -eux; \
     curl -fsSL "https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-${TRIPLE}.tgz" \
       | tar xz -C /usr/local/cargo/bin
 
-# Tools
-RUN cargo binstall flip-link --no-confirm --force
+# Tools + sccache (shared compilation cache, uses GHA cache backend)
+RUN cargo binstall flip-link sccache --no-confirm --force
+
+# Enable sccache for all cargo invocations.
+# ACTIONS_CACHE_URL and ACTIONS_RUNTIME_TOKEN are injected at build time
+# via Docker --mount=type=secret so sccache can read/write the GHA cache.
+ENV RUSTC_WRAPPER=sccache
+ENV SCCACHE_GHA_ENABLED=true
 
 # ---------- Pre-compile dependencies using the "dummy source" trick ----------
 #
@@ -39,6 +45,10 @@ RUN cargo binstall flip-link --no-confirm --force
 # create minimal stub sources, and compile.  The local crate fails (stub code),
 # but all *dependency* .rlib artifacts land in /cache/target and are reused at
 # CI time via CARGO_TARGET_DIR=/cache/target.
+#
+# sccache stores each compiled crate in the GHA cache, so even when this Docker
+# layer is invalidated (Cargo.lock change), unchanged crates are served from
+# sccache rather than recompiled from source.
 
 WORKDIR /tmp/deps
 
@@ -63,17 +73,33 @@ RUN mkdir -p src \
 # Compute host triple once for all pre-compilation steps
 RUN echo "export HOST_TRIPLE=$(rustc -vV | sed -n 's/host: //p')" > /tmp/host-env.sh
 
-# Pico2w embedded deps (release, default features)
-RUN cargo build --release --target thumbv8m.main-none-eabihf --lib \
-    --target-dir /cache/target 2>&1 || true
-
-# Pico1w embedded deps (release, pico1w feature)
-RUN cargo build --release --target thumbv6m-none-eabi \
-    --no-default-features --features embedded,pico1w --lib \
-    --target-dir /cache/target 2>&1 || true
+# Embedded deps — all board × transport combinations used in CI matrix.
+# Merged into a single layer so proc-macro crates (compiled for host) are shared.
+RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
+    --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
+    cargo build --release --target thumbv8m.main-none-eabihf --lib \
+      --target-dir /cache/target 2>&1 || true \
+ && cargo build --release --target thumbv8m.main-none-eabihf \
+      --no-default-features --features embedded,pico2w,transport-websocket --lib \
+      --target-dir /cache/target 2>&1 || true \
+ && cargo build --release --target thumbv8m.main-none-eabihf \
+      --no-default-features --features embedded,pico2w,transport-mqtt --lib \
+      --target-dir /cache/target 2>&1 || true \
+ && cargo build --release --target thumbv6m-none-eabi \
+      --no-default-features --features embedded,pico1w,transport-tcp --lib \
+      --target-dir /cache/target 2>&1 || true \
+ && cargo build --release --target thumbv6m-none-eabi \
+      --no-default-features --features embedded,pico1w,transport-websocket --lib \
+      --target-dir /cache/target 2>&1 || true \
+ && cargo build --release --target thumbv6m-none-eabi \
+      --no-default-features --features embedded,pico1w,transport-mqtt --lib \
+      --target-dir /cache/target 2>&1 || true \
+ && sccache --show-stats
 
 # Host test deps (all board variants)
-RUN . /tmp/host-env.sh \
+RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
+    --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
+    . /tmp/host-env.sh \
     && cargo test --no-run --test host --no-default-features \
        --target "$HOST_TRIPLE" --target-dir /cache/target 2>&1 || true \
     && cargo test --no-run --test host --no-default-features --features pico2w \
@@ -82,11 +108,16 @@ RUN . /tmp/host-env.sh \
        --target "$HOST_TRIPLE" --target-dir /cache/target 2>&1 || true
 
 # Client crate deps
-RUN . /tmp/host-env.sh \
+RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
+    --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
+    . /tmp/host-env.sh \
     && cargo test --no-run -p pico-socketeer-client \
        --target "$HOST_TRIPLE" --target-dir /cache/target 2>&1 || true
 
-# Clean up dummy source tree (keep only /cache/target)
+# Clean up dummy source tree (keep only /cache/target).
+# Unset sccache wrapper — downstream CI jobs use pre-compiled artifacts from
+# /cache/target and don't need (or have credentials for) sccache.
 RUN rm -rf /tmp/deps /tmp/host-env.sh
+ENV RUSTC_WRAPPER=
 
 WORKDIR /
