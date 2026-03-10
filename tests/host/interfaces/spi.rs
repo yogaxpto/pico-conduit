@@ -112,6 +112,14 @@ fn spi_write_configured_succeeds() {
 }
 
 #[test]
+fn spi_write_missing_bytes_returns_missing_field() {
+    let cmd = make_spi_cmd("w3", "write", Some(0));
+    let resp = handle_write(&cmd, true);
+    assert!(!resp.ok);
+    assert_eq!(resp.error, Some(ERROR_MISSING_FIELD));
+}
+
+#[test]
 fn spi_write_unconfigured_returns_not_configured() {
     let mut cmd = make_spi_cmd("w2", "write", Some(0));
     cmd.bytes = Some("AA=="); // base64 for [0x00]
@@ -144,6 +152,15 @@ fn spi_transfer_empty_bytes_returns_missing_field() {
     let mut cmd = make_spi_cmd("ec3", "transfer", Some(0));
     cmd.bytes = Some(""); // empty
     let resp = handle_transfer(&cmd, true, &[0x00]);
+    assert!(!resp.ok);
+    assert_eq!(resp.error, Some(ERROR_MISSING_FIELD));
+}
+
+#[test]
+fn spi_write_empty_bytes_returns_missing_field() {
+    let mut cmd = make_spi_cmd("ec5", "write", Some(0));
+    cmd.bytes = Some(""); // empty
+    let resp = handle_write(&cmd, true);
     assert!(!resp.ok);
     assert_eq!(resp.error, Some(ERROR_MISSING_FIELD));
 }

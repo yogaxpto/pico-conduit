@@ -254,6 +254,16 @@ fn pin_30_is_unavailable() {
     assert!(!is_pin_available(30));
 }
 
+#[test]
+fn pin_27_is_reserved() {
+    assert!(!is_pin_available(27));
+}
+
+#[test]
+fn pin_28_is_reserved() {
+    assert!(!is_pin_available(28));
+}
+
 // ----- set_mode validation edge cases -----
 
 #[test]

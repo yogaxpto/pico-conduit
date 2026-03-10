@@ -159,6 +159,25 @@ fn i2c_write_read_missing_write_bytes() {
 // ----- I2C validation edge cases -----
 
 #[test]
+fn i2c_write_missing_addr_returns_missing_field() {
+    let mut cmd = make_i2c_cmd("ec6", "write", Some(0), None);
+    cmd.bytes = Some("AA==");
+    let resp = handle_write(&cmd, true);
+    assert!(!resp.ok);
+    assert_eq!(resp.error, Some(ERROR_MISSING_FIELD));
+}
+
+#[test]
+fn i2c_write_read_missing_addr_returns_missing_field() {
+    let mut cmd = make_i2c_cmd("ec7", "write_read", Some(0), None);
+    cmd.write_bytes = Some("AA==");
+    cmd.read_len = Some(2);
+    let resp = handle_write_read(&cmd, true, &[0x00, 0x00]);
+    assert!(!resp.ok);
+    assert_eq!(resp.error, Some(ERROR_MISSING_FIELD));
+}
+
+#[test]
 fn i2c_configure_freq_zero_returns_error() {
     let mut cmd = make_i2c_cmd("ec1", "configure", Some(0), None);
     cmd.freq_hz = Some(0);
