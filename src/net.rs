@@ -68,7 +68,9 @@ const SUBNET_MASK: [u8; 4] = [255, 255, 255, 0];
 const AP_IP_STR: &[u8] = b"192.168.4.1";
 /// Redirect target for the captive-portal.
 const AP_IP_URL: &[u8] = b"http://192.168.4.1/";
+#[cfg(any(feature = "transport-tcp", feature = "transport-websocket"))]
 const TCP_READ_TIMEOUT: Duration = Duration::from_secs(30);
+#[cfg(any(feature = "transport-tcp", feature = "transport-websocket"))]
 const MAX_RECONNECT_SECS: u16 = 600; // 10 minutes
 
 // ── Flash credential storage constants ───────────────────────────────────────
@@ -373,6 +375,7 @@ async fn check_factory_reset(pin: &mut Flex<'_>) -> bool {
 // ── Reconnect backoff ─────────────────────────────────────────────────────────
 
 /// Exponential backoff: 5s → 10s → 20s → 40s → 60s (capped at 60s).
+#[cfg(any(feature = "transport-tcp", feature = "transport-websocket"))]
 fn backoff_duration(attempt: u8) -> Duration {
     match attempt {
         0 => Duration::from_secs(5),
@@ -1116,6 +1119,7 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
     }
 }
 
+#[cfg(any(feature = "transport-tcp", feature = "transport-websocket"))]
 async fn handle_client<T: Transport>(
     transport: &mut T,
     config_ssid: &heapless::String<32>,
