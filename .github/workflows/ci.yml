@@ -98,6 +98,24 @@ jobs:
         if: matrix.board == 'pico2w'
         run: cargo clippy -p pico-socketeer-client --target ${{ steps.host.outputs.triple }} -- -D warnings
 
+  check-exclusivity:
+    name: Transport Exclusivity Guard
+    needs: [build]
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.build.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Two transports must not compile
+        run: |
+          cargo build --no-default-features \
+            --features embedded,pico2w,transport-tcp,transport-websocket 2>&1 \
+            | grep -q "mutually exclusive"
+
   host-test:
     name: Test (${{ matrix.board }})
     needs: [build]

@@ -21,6 +21,25 @@ compile_error!("features `pico2w` and `pico1w` are mutually exclusive");
 #[cfg(all(feature = "embedded", not(feature = "pico2w"), not(feature = "pico1w")))]
 compile_error!("embedded builds require exactly one of `pico2w` or `pico1w`");
 
+#[cfg(all(feature = "transport-tcp", feature = "transport-websocket"))]
+compile_error!("transport features `transport-tcp` and `transport-websocket` are mutually exclusive");
+
+#[cfg(all(feature = "transport-tcp", feature = "transport-mqtt"))]
+compile_error!("transport features `transport-tcp` and `transport-mqtt` are mutually exclusive");
+
+#[cfg(all(feature = "transport-websocket", feature = "transport-mqtt"))]
+compile_error!("transport features `transport-websocket` and `transport-mqtt` are mutually exclusive");
+
+#[cfg(all(
+    feature = "embedded",
+    not(feature = "transport-tcp"),
+    not(feature = "transport-websocket"),
+    not(feature = "transport-mqtt")
+))]
+compile_error!(
+    "embedded builds require exactly one of: transport-tcp, transport-websocket, transport-mqtt"
+);
+
 pub mod base64;
 pub mod board;
 pub mod interfaces;
