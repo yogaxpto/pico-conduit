@@ -4,6 +4,7 @@ mod board_tests;
 mod fixtures;
 mod interfaces;
 mod led_tests;
+mod mqtt_tests;
 mod portal_tests;
 mod protocol_tests;
 mod router_tests;

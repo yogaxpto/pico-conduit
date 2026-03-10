@@ -3,7 +3,7 @@ use pico_socketeer::led::{LedPattern, LedState, SOS_TIMING};
 /// LedState must have exactly 9 variants — one for each row in the LED State Reference table.
 /// This test prevents silent omissions when the table is updated.
 #[test]
-fn led_state_has_nine_variants() {
+fn led_state_has_eleven_variants() {
     // Exhaustive match — compile error if any variant is missing or extra
     let count = [
         LedState::Booting,
@@ -15,9 +15,11 @@ fn led_state_has_nine_variants() {
         LedState::Error,
         LedState::Saving,
         LedState::Rebooting,
+        LedState::MqttConnecting,
+        LedState::MqttConnected,
     ]
     .len();
-    assert_eq!(count, 9, "LedState must have exactly 9 variants");
+    assert_eq!(count, 11, "LedState must have exactly 11 variants");
 }
 
 /// Exhaustive match to ensure the compiler catches any missing variants.
@@ -35,6 +37,8 @@ fn led_state_variants_exhaustive_match() {
         LedState::Error => "error",
         LedState::Saving => "saving",
         LedState::Rebooting => "rebooting",
+        LedState::MqttConnecting => "mqtt_connecting",
+        LedState::MqttConnected => "mqtt_connected",
     };
 }
 
@@ -146,4 +150,19 @@ fn booting_trailing_gap_is_1000ms() {
     let last = steps.last().unwrap();
     assert!(!last.0, "trailing step must be OFF");
     assert_eq!(last.1, 1000, "trailing gap must be 1000ms");
+}
+
+// ── MQTT LED state tests ─────────────────────────────────────────────────────
+
+#[test]
+fn led_mqtt_connecting_pattern_exists() {
+    assert!(matches!(
+        LedState::MqttConnecting.pattern(),
+        LedPattern::Repeat(_)
+    ));
+}
+
+#[test]
+fn led_mqtt_connected_pattern_exists() {
+    assert_eq!(LedState::MqttConnected.pattern(), LedPattern::Solid(true));
 }

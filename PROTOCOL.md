@@ -244,6 +244,47 @@ websocat ws://<pico-ip>:4243
 
 ---
 
+## Transport: MQTT
+
+- **Broker:** external MQTT broker (configured via provisioning portal)
+- **Port:** broker-defined (default 1883)
+- **Protocol:** MQTT 5.0 (QoS 0, compatible with 3.1.1 brokers)
+- **Topics:**
+  - Command (client → device): `pico/<last4hex>/cmd`
+  - Response (device → client): `pico/<last4hex>/resp`
+  - `<last4hex>` is the lowercase hex of the last two bytes of the device's MAC address
+- **Client ID:** `pico-<last4hex>`
+- **Framing:** each MQTT PUBLISH payload is a complete JSON command or response (no newline delimiter needed)
+- **Connection model:** single-command-at-a-time; device processes one command per PUBLISH, publishes response, then waits for next
+- **Reconnect backoff:** 5s → 10s → 20s → 40s → 60s cap; resets on successful connection
+- **Device state:** `DeviceState` (configured peripherals) resets on broker reconnect
+
+Build with:
+```sh
+cargo build --release --no-default-features --features embedded,pico2w,transport-mqtt
+```
+
+### MQTT `config/get` response
+
+When built with `transport-mqtt`, the `config/get` response includes additional fields:
+
+```json
+{"id":"1","ok":true,"data":{"ssid":"MyNet","ip":"192.168.1.42","connected":true,"mqtt_host":"192.168.1.100","mqtt_port":1883},"error":null}
+```
+
+### MQTT example (using mosquitto_pub/sub)
+
+```sh
+# Subscribe to responses
+mosquitto_sub -h <broker> -t 'pico/a3f2/resp'
+
+# Send a command
+mosquitto_pub -h <broker> -t 'pico/a3f2/cmd' -m '{"version":1,"id":"1","interface":"gpio","action":"read","pin":0}'
+# → {"id":"1","ok":true,"data":{"value":0},"error":null}
+```
+
+---
+
 ## Examples
 
 **GPIO write:**

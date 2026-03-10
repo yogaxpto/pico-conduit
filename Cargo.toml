@@ -18,7 +18,7 @@ pico2w = ["embassy-rp/rp235xa"]
 pico1w = ["embassy-rp/rp2040"]
 transport-tcp = []
 transport-websocket = []
-transport-mqtt = []
+transport-mqtt = ["dep:rust-mqtt"]
 
 [[bin]]
 name = "pico-socketeer"
@@ -81,6 +81,9 @@ embassy-net     = { version = "0.8.0", features = [
     "dns",
 ] }
 embassy-futures = "0.1.1"
+
+# MQTT client (async, no_std, uses embedded-io-async directly — no adapter needed)
+rust-mqtt = { version = "0.4.1", default-features = false, features = ["v5", "bump", "defmt"], optional = true }
 
 # CYW43439 Wi-Fi driver (Pico 2W onboard chip)
 cyw43     = { version = "0.6.0", features = ["defmt", "firmware-logs"] }

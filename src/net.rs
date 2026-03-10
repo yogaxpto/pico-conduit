@@ -528,6 +528,10 @@ async fn sta_mode(spawner: Spawner, net_device: cyw43::NetDriver<'static>, creds
         );
         ws_server(stack, creds.ssid, config_ip).await;
     }
+    #[cfg(feature = "transport-mqtt")]
+    {
+        mqtt_client(stack, creds, config_ip).await;
+    }
 }
 
 // ── TCP server (STA mode) ─────────────────────────────────────────────────────
@@ -878,6 +882,237 @@ async fn ws_server(
                 reconnect_attempt = reconnect_attempt.saturating_add(1);
             }
         }
+    }
+}
+
+// ── MQTT client (STA mode) ───────────────────────────────────────────────────
+
+#[cfg(feature = "transport-mqtt")]
+async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapless::String<16>) {
+    use pico_socketeer::mqtt;
+    use rust_mqtt::Bytes;
+    use rust_mqtt::buffer::BumpBuffer;
+    use rust_mqtt::client::Client;
+    use rust_mqtt::client::event::Event;
+    use rust_mqtt::client::options::{
+        ConnectOptions, PublicationOptions, RetainHandling, SubscriptionOptions,
+    };
+    use rust_mqtt::config::{KeepAlive, SessionExpiryInterval};
+    use rust_mqtt::types::{MqttString, QoS, TopicName};
+
+    if creds.mqtt_host.is_empty() {
+        defmt::warn!("MQTT host is empty — MQTT transport disabled");
+        #[allow(clippy::empty_loop)]
+        loop {
+            Timer::after_secs(3600).await;
+        }
+    }
+
+    // Resolve MAC for topic/client-ID construction
+    let mac = {
+        let mut ctrl = CONTROL_MUTEX.lock().await;
+        if let Some(c) = ctrl.as_mut() {
+            c.address().await
+        } else {
+            [0u8; 6]
+        }
+    };
+    let cmd_topic_str = mqtt::cmd_topic(mac);
+    let resp_topic_str = mqtt::resp_topic(mac);
+    let client_id_str = mqtt::client_id(mac);
+
+    defmt::info!(
+        "MQTT broker {}:{}, client_id={}, cmd={}, resp={}",
+        creds.mqtt_host.as_str(),
+        creds.mqtt_port,
+        client_id_str.as_str(),
+        cmd_topic_str.as_str(),
+        resp_topic_str.as_str(),
+    );
+
+    let mut reconnect_attempt: u8 = 0;
+
+    loop {
+        LED_SIGNAL.signal(LedState::MqttConnecting);
+
+        // Parse broker IP address
+        let broker_ip = match creds.mqtt_host.as_str().parse::<core::net::Ipv4Addr>() {
+            Ok(ip) => ip,
+            Err(_) => {
+                defmt::error!("Invalid MQTT broker IP: {}", creds.mqtt_host.as_str());
+                LED_SIGNAL.signal(LedState::Error);
+                Timer::after_secs(60).await;
+                continue;
+            }
+        };
+        let broker_addr = embassy_net::Ipv4Address::from(broker_ip.octets());
+
+        // TCP connect to broker
+        let mut rx_buf = [0u8; 1024];
+        let mut tx_buf = [0u8; 1024];
+        let mut socket = TcpSocket::new(stack, &mut rx_buf, &mut tx_buf);
+        socket.set_timeout(Some(Duration::from_secs(90)));
+
+        if let Err(e) = socket.connect((broker_addr, creds.mqtt_port)).await {
+            defmt::warn!("MQTT TCP connect failed: {:?}", e);
+            let secs = mqtt::backoff_secs(reconnect_attempt);
+            defmt::warn!(
+                "MQTT reconnect attempt {} after {}s",
+                reconnect_attempt,
+                secs
+            );
+            LED_SIGNAL.signal(LedState::Reconnecting);
+            Timer::after_secs(secs as u64).await;
+            reconnect_attempt = reconnect_attempt.saturating_add(1);
+            continue;
+        }
+
+        defmt::info!("MQTT TCP connected");
+
+        // Set up MQTT client with BumpBuffer (no-alloc)
+        let mut buf_storage = [0u8; 1024];
+        let mut buffer = BumpBuffer::new(&mut buf_storage);
+        let mut client: Client<'_, _, _, 1, 1, 1> = Client::new(&mut buffer);
+
+        let connect_opts = ConnectOptions {
+            session_expiry_interval: SessionExpiryInterval::Seconds(0),
+            clean_start: true,
+            keep_alive: KeepAlive::Seconds(60),
+            will: None,
+            user_name: None,
+            password: None,
+        };
+        let mqtt_client_id = MqttString::try_from(client_id_str.as_str()).unwrap();
+
+        // connect() takes socket by value — client owns the connection afterward
+        match client
+            .connect(socket, &connect_opts, Some(mqtt_client_id))
+            .await
+        {
+            Ok(_) => {
+                defmt::info!("MQTT CONNECT ok");
+            }
+            Err(e) => {
+                defmt::warn!("MQTT CONNECT failed: {:?}", e);
+                let secs = mqtt::backoff_secs(reconnect_attempt);
+                LED_SIGNAL.signal(LedState::Reconnecting);
+                Timer::after_secs(secs as u64).await;
+                reconnect_attempt = reconnect_attempt.saturating_add(1);
+                continue;
+            }
+        }
+
+        // Reset bump buffer after connect handshake to reclaim space
+        // SAFETY: no references to connect-phase data are held at this point
+        unsafe { client.buffer().reset() };
+
+        // Subscribe to command topic
+        let cmd_topic = unsafe {
+            TopicName::new_unchecked(MqttString::from_slice(cmd_topic_str.as_str()).unwrap())
+        };
+        let sub_opts = SubscriptionOptions {
+            retain_handling: RetainHandling::SendIfNotSubscribedBefore,
+            retain_as_published: false,
+            no_local: false,
+            qos: QoS::AtMostOnce,
+        };
+        if let Err(e) = client.subscribe(cmd_topic.clone().into(), sub_opts).await {
+            defmt::warn!("MQTT SUBSCRIBE failed: {:?}", e);
+            let secs = mqtt::backoff_secs(reconnect_attempt);
+            LED_SIGNAL.signal(LedState::Reconnecting);
+            Timer::after_secs(secs as u64).await;
+            reconnect_attempt = reconnect_attempt.saturating_add(1);
+            continue;
+        }
+
+        // Wait for SUBACK before entering message loop
+        match client.poll().await {
+            Ok(Event::Suback(_)) => {
+                defmt::info!("MQTT subscribed to {}", cmd_topic_str.as_str());
+            }
+            Ok(_) => {
+                defmt::warn!("Expected SUBACK, got different event");
+                continue;
+            }
+            Err(e) => {
+                defmt::warn!("MQTT poll error waiting for SUBACK: {:?}", e);
+                continue;
+            }
+        }
+
+        LED_SIGNAL.signal(LedState::MqttConnected);
+        reconnect_attempt = 0;
+
+        // Process messages
+        let mut state = pico_socketeer::router::DeviceState::default();
+        let _ = state.config_ssid.push_str(creds.ssid.as_str());
+        let _ = state.config_ip.push_str(config_ip.as_str());
+        state.config_connected = true;
+        #[cfg(feature = "transport-mqtt")]
+        {
+            let _ = state.config_mqtt_host.push_str(creds.mqtt_host.as_str());
+            state.config_mqtt_port = creds.mqtt_port;
+        }
+
+        loop {
+            // Reset bump buffer before each poll to reclaim space from previous iteration
+            // SAFETY: no references to previous poll data are held — response was serialized
+            // and published (or dropped) before reaching this point
+            unsafe { client.buffer().reset() };
+
+            match client.poll().await {
+                Ok(Event::Publish(publish)) => {
+                    let payload = publish.message.as_ref();
+                    defmt::debug!("MQTT PUBLISH received, {} bytes", payload.len());
+
+                    let resp = match pico_socketeer::protocol::parse_command(payload) {
+                        Ok(cmd) => match pico_socketeer::router::validate_route(&cmd) {
+                            Ok(route) => pico_socketeer::router::dispatch(&cmd, route, &mut state),
+                            Err(err_resp) => err_resp,
+                        },
+                        Err(err_code) => pico_socketeer::protocol::Response::error("", err_code),
+                    };
+
+                    // Serialize and publish response
+                    let mut resp_buf = [0u8; MAX_MSG_LEN];
+                    if let Ok(n) =
+                        pico_socketeer::protocol::serialize_response(&resp, &mut resp_buf)
+                    {
+                        let resp_topic = unsafe {
+                            TopicName::new_unchecked(
+                                MqttString::from_slice(resp_topic_str.as_str()).unwrap(),
+                            )
+                        };
+                        let pub_opts = PublicationOptions {
+                            retain: false,
+                            topic: resp_topic,
+                            qos: QoS::AtMostOnce,
+                        };
+                        if let Err(e) = client.publish(&pub_opts, Bytes::from(&resp_buf[..n])).await
+                        {
+                            defmt::warn!("MQTT PUBLISH response failed: {:?}", e);
+                            break;
+                        }
+                    }
+
+                    if state.pending_reboot {
+                        defmt::info!("Reboot requested via MQTT");
+                        break;
+                    }
+                }
+                Ok(Event::Pingresp) => {
+                    defmt::debug!("MQTT PINGRESP");
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    defmt::warn!("MQTT poll error: {:?}", e);
+                    break;
+                }
+            }
+        }
+
+        // Client dropped here — socket released with it
+        defmt::warn!("MQTT disconnected, will reconnect");
     }
 }
 

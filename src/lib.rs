@@ -25,6 +25,7 @@ pub mod base64;
 pub mod board;
 pub mod interfaces;
 pub mod led;
+pub mod mqtt;
 pub mod protocol;
 pub mod provisioning;
 pub mod router;

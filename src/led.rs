@@ -48,6 +48,17 @@ const CONNECTING_STEPS: &[(bool, u16)] = &[(true, 100), (false, 100)];
 
 const RECONNECTING_STEPS: &[(bool, u16)] = &[(true, 250), (false, 250)];
 
+/// MQTT connecting to broker — triple-blink (3×(80ms ON/80ms OFF), 500ms OFF, repeat)
+const MQTT_CONNECTING_STEPS: &[(bool, u16)] = &[
+    (true, 80),
+    (false, 80),
+    (true, 80),
+    (false, 80),
+    (true, 80),
+    (false, 80),
+    (false, 500),
+];
+
 // 5 rapid flashes — 10 steps
 const SAVING_STEPS: &[(bool, u16)] = &[
     (true, 100),
@@ -125,6 +136,10 @@ pub enum LedState {
     Saving,
     /// USB bootloader reboot imminent — 10 rapid flashes then OFF (10×(50ms ON/50ms OFF))
     Rebooting,
+    /// MQTT connecting to broker — triple-blink (3×(80ms ON/80ms OFF), 500ms OFF, repeat)
+    MqttConnecting,
+    /// MQTT connected to broker — solid ON (same as Connected)
+    MqttConnected,
 }
 
 impl LedState {
@@ -140,6 +155,8 @@ impl LedState {
             LedState::Error => LedPattern::Repeat(SOS_TIMING),
             LedState::Saving => LedPattern::OneShot(SAVING_STEPS),
             LedState::Rebooting => LedPattern::OneShot(REBOOTING_STEPS),
+            LedState::MqttConnecting => LedPattern::Repeat(MQTT_CONNECTING_STEPS),
+            LedState::MqttConnected => LedPattern::Solid(true),
         }
     }
 }

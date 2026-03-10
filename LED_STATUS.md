@@ -14,6 +14,8 @@ The onboard LED (driven via CYW43 GPIO0) communicates firmware state through bli
 | `Reconnecting` | 250 ms on, 250 ms off (medium blink) | Lost Wi-Fi — reconnect backoff in progress |
 | `Error` | SOS Morse pattern (see below) | 10 minutes of failed reconnections; requires power cycle or fix |
 | `Saving` | 5 rapid flashes | Writing credentials to flash |
+| `MqttConnecting` | Triple-blink (3×80 ms on/off, 500 ms pause) | Connecting to MQTT broker (transport-mqtt only) |
+| `MqttConnected` | Solid ON | Connected to MQTT broker and subscribed (transport-mqtt only) |
 | `Rebooting` | 10 rapid flashes then OFF | USB bootloader reboot imminent — release TCP connection |
 
 ## Timing Diagrams
@@ -80,6 +82,16 @@ Full SOS timing sequence (ms on/off pairs):
 | 16 | OFF | 100 | |
 | 17 | ON  | 100 | S dit 3 |
 | 18 | OFF | 2000 | inter-message gap |
+
+### MqttConnecting (transport-mqtt only)
+```
++80-80+80-80+80-80|___500___|+80-80+80-80+80-80|___...
+```
+
+### MqttConnected (transport-mqtt only)
+```
++++++++++++++++++++++++ (solid on until state changes)
+```
 
 ### Saving
 ```
