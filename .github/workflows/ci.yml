@@ -66,7 +66,7 @@ jobs:
             cargo-features: ""
           - board: pico1w
             target: thumbv6m-none-eabi
-            cargo-features: "--no-default-features --features embedded,pico1w"
+            cargo-features: "--no-default-features --features embedded,pico1w,transport-tcp"
     steps:
       - uses: actions/checkout@v6
 
@@ -141,7 +141,7 @@ jobs:
             flash-desc: "4 MB"
           - board: pico1w
             target: thumbv6m-none-eabi
-            cargo-features: "--no-default-features --features embedded,pico1w"
+            cargo-features: "--no-default-features --features embedded,pico1w,transport-tcp"
             flash-max: 2088960
             flash-desc: "2 MB"
     steps:

@@ -12,10 +12,11 @@ license = "MIT"
 # embassy, cyw43, and other Cortex-M-only crates. Host tests pass --no-default-features
 # so the binary is silently skipped.
 [features]
-default = ["embedded", "pico2w"]
+default = ["embedded", "pico2w", "transport-tcp"]
 embedded = []
 pico2w = ["embassy-rp/rp235xa"]
 pico1w = ["embassy-rp/rp2040"]
+transport-tcp = []
 
 [[bin]]
 name = "pico-socketeer"

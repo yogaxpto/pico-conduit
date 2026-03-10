@@ -41,12 +41,15 @@ use static_cell::StaticCell;
 
 use pico_socketeer::board::{CRED_FLASH_OFFSET, FLASH_SIZE};
 use pico_socketeer::led::{LED_SIGNAL, LedPattern, LedState};
-use pico_socketeer::protocol::{FrameReader, MAX_MSG_LEN, parse_command, serialize_response};
+use pico_socketeer::protocol::{
+    FrameReader, MAX_MSG_LEN, parse_command, serialize_response,
+};
 use pico_socketeer::provisioning::portal::{
     Method, decode_url_encoded, make_ap_ssid, parse_connect_form, parse_request_line,
 };
 use pico_socketeer::provisioning::storage::Credentials;
 use pico_socketeer::router::{DeviceState, dispatch, validate_route};
+use pico_socketeer::transport::{Transport, TransportError};
 
 // ── CYW43 firmware blobs ──────────────────────────────────────────────────────
 const CYW43_FW: &[u8] = include_bytes!("../cyw43-firmware/43439A0.bin");
@@ -75,6 +78,72 @@ const MAX_RECONNECT_SECS: u16 = 600; // 10 minutes
 const CRED_MAGIC: u32 = 0xC0FF_EE42;
 /// Record layout: magic(4) + ssid_len(1) + pwd_len(1) + ssid(32) + pwd(64) = 102 bytes.
 const CRED_RECORD_SIZE: usize = 102;
+
+// ── TcpTransport ─────────────────────────────────────────────────────────────
+
+/// TCP transport — wraps a `TcpSocket` and uses `FrameReader` for newline-delimited framing.
+struct TcpTransport<'a, 'b> {
+    socket: &'a mut TcpSocket<'b>,
+    frame_reader: FrameReader,
+}
+
+impl<'a, 'b> TcpTransport<'a, 'b> {
+    fn new(socket: &'a mut TcpSocket<'b>) -> Self {
+        Self {
+            socket,
+            frame_reader: FrameReader::new(),
+        }
+    }
+}
+
+impl Transport for TcpTransport<'_, '_> {
+    async fn read_frame<'c>(&mut self, buf: &'c mut [u8]) -> Result<&'c [u8], TransportError> {
+        let mut byte_buf = [0u8; 1];
+        loop {
+            let read_result =
+                with_timeout(TCP_READ_TIMEOUT, self.socket.read(&mut byte_buf)).await;
+            match read_result {
+                Err(_) => {
+                    defmt::warn!("TCP read timeout — closing idle connection");
+                    self.socket.abort();
+                    return Err(TransportError::Timeout);
+                }
+                Ok(Err(e)) => {
+                    defmt::warn!("TCP read error: {:?}", e);
+                    self.socket.abort();
+                    return Err(TransportError::Disconnected);
+                }
+                Ok(Ok(0)) => {
+                    self.socket.abort();
+                    return Err(TransportError::Disconnected);
+                }
+                Ok(Ok(_)) => {}
+            }
+
+            match self.frame_reader.push(byte_buf[0]) {
+                Err(err_code) => {
+                    self.frame_reader.reset();
+                    return Err(TransportError::Protocol(err_code));
+                }
+                Ok(None) => continue,
+                Ok(Some(frame)) => {
+                    let len = frame.len();
+                    buf[..len].copy_from_slice(frame);
+                    return Ok(&buf[..len]);
+                }
+            }
+        }
+    }
+
+    async fn write_frame(&mut self, data: &[u8]) -> Result<(), TransportError> {
+        if self.socket.write_all(data).await.is_err() {
+            defmt::warn!("TCP write error");
+            self.socket.abort();
+            return Err(TransportError::Disconnected);
+        }
+        Ok(())
+    }
+}
 
 // ── Platform validation ──────────────────────────────────────────────────────
 
@@ -471,7 +540,10 @@ async fn tcp_server(
                 reconnect_attempt = 0;
                 total_offline_secs = 0;
 
-                handle_client(&mut socket, &config_ssid, &config_ip).await;
+                {
+                    let mut transport = TcpTransport::new(&mut socket);
+                    handle_client(&mut transport, &config_ssid, &config_ip).await;
+                }
 
                 // Re-enable PM after client disconnects
                 {
@@ -509,14 +581,13 @@ async fn tcp_server(
     }
 }
 
-async fn handle_client(
-    socket: &mut TcpSocket<'_>,
+async fn handle_client<T: Transport>(
+    transport: &mut T,
     config_ssid: &heapless::String<32>,
     config_ip: &heapless::String<16>,
 ) {
-    let mut frame_reader = FrameReader::new();
+    let mut frame_buf = [0u8; MAX_MSG_LEN];
     let mut resp_buf = [0u8; MAX_MSG_LEN];
-    let mut byte_buf = [0u8; 1];
     let mut device_state = DeviceState {
         config_ssid: config_ssid.clone(),
         config_ip: config_ip.clone(),
@@ -525,53 +596,38 @@ async fn handle_client(
     };
 
     loop {
-        let read_result = with_timeout(TCP_READ_TIMEOUT, socket.read(&mut byte_buf)).await;
-        match read_result {
-            Err(_) => {
-                defmt::warn!("TCP read timeout — closing idle connection");
-                socket.abort();
+        let frame = match transport.read_frame(&mut frame_buf).await {
+            Ok(frame) => frame,
+            Err(TransportError::Protocol(err_code)) => {
+                let resp = pico_socketeer::protocol::Response::error("", err_code);
+                if let Ok(n) = serialize_response(&resp, &mut resp_buf) {
+                    let _ = transport.write_frame(&resp_buf[..n]).await;
+                }
+                continue;
+            }
+            Err(TransportError::Disconnected | TransportError::Timeout) => {
                 return;
             }
-            Ok(Err(e)) => {
-                defmt::warn!("TCP read error: {:?}", e);
-                socket.abort();
-                return;
-            }
-            Ok(Ok(0)) => {
-                socket.abort();
-                return;
-            }
-            Ok(Ok(_)) => {}
-        }
-
-        let response = match frame_reader.push(byte_buf[0]) {
-            Err(err_code) => {
-                frame_reader.reset();
-                Some(pico_socketeer::protocol::Response::error("", err_code))
-            }
-            Ok(None) => None,
-            Ok(Some(frame)) => Some(match parse_command(frame) {
-                Err(err_code) => pico_socketeer::protocol::Response::error("", err_code),
-                Ok(cmd) => match validate_route(&cmd) {
-                    Err(r) => r,
-                    Ok(route) => dispatch(&cmd, route, &mut device_state),
-                },
-            }),
         };
 
-        if let Some(resp) = response
-            && let Ok(n) = serialize_response(&resp, &mut resp_buf)
-            && socket.write_all(&resp_buf[..n]).await.is_err()
+        let response = match parse_command(frame) {
+            Err(err_code) => pico_socketeer::protocol::Response::error("", err_code),
+            Ok(cmd) => match validate_route(&cmd) {
+                Err(r) => r,
+                Ok(route) => dispatch(&cmd, route, &mut device_state),
+            },
+        };
+
+        if let Ok(n) = serialize_response(&response, &mut resp_buf)
+            && transport.write_frame(&resp_buf[..n]).await.is_err()
         {
-            defmt::warn!("TCP write error");
-            socket.abort();
             return;
         }
 
         if device_state.pending_reboot {
             defmt::info!("rebooting to USB bootloader");
             LED_SIGNAL.signal(LedState::Rebooting);
-            Timer::after_millis(650).await; // 10 × 100 ms flash cycle + margin
+            Timer::after_millis(650).await;
             embassy_rp::rom_data::reset_to_usb_boot(0, 0);
             #[allow(clippy::empty_loop)]
             loop {}
