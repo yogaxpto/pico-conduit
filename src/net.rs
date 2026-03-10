@@ -45,12 +45,16 @@ use pico_socketeer::board::{CRED_FLASH_OFFSET, FLASH_SIZE};
 use pico_socketeer::led::{LED_SIGNAL, LedPattern, LedState};
 #[cfg(feature = "transport-tcp")]
 use pico_socketeer::protocol::FrameReader;
-use pico_socketeer::protocol::{MAX_MSG_LEN, parse_command, serialize_response};
+use pico_socketeer::protocol::MAX_MSG_LEN;
+#[cfg(any(feature = "transport-tcp", feature = "transport-websocket"))]
+use pico_socketeer::protocol::{parse_command, serialize_response};
 use pico_socketeer::provisioning::portal::{
     Method, decode_url_encoded, make_ap_ssid, parse_connect_form, parse_request_line,
 };
 use pico_socketeer::provisioning::storage::Credentials;
+#[cfg(any(feature = "transport-tcp", feature = "transport-websocket"))]
 use pico_socketeer::router::{DeviceState, dispatch, validate_route};
+#[cfg(any(feature = "transport-tcp", feature = "transport-websocket"))]
 use pico_socketeer::transport::{Transport, TransportError};
 
 // ── CYW43 firmware blobs ──────────────────────────────────────────────────────
