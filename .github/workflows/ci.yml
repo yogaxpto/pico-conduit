@@ -92,6 +92,9 @@ jobs:
           - board: pico1w-mqtt
             target: thumbv6m-none-eabi
             cargo-features: "--no-default-features --features embedded,pico1w,transport-mqtt"
+    defaults:
+      run:
+        working-directory: /src
     steps:
       - name: Resolve host target
         id: host
@@ -118,6 +121,9 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        working-directory: /src
     steps:
       - name: Two transports must not compile
         run: |
@@ -141,6 +147,9 @@ jobs:
             cargo-features: "--features pico2w"
           - board: pico1w
             cargo-features: "--features pico1w"
+    defaults:
+      run:
+        working-directory: /src
     steps:
       - name: Resolve host target
         id: host
@@ -203,6 +212,9 @@ jobs:
             cargo-features: "--no-default-features --features embedded,pico1w,transport-mqtt"
             flash-max: 2088960
             flash-desc: "2 MB"
+    defaults:
+      run:
+        working-directory: /src
     steps:
       - name: Build firmware (release)
         run: cargo build --release --target ${{ matrix.target }} ${{ matrix.cargo-features }}
