@@ -17,7 +17,7 @@ env:
   CARGO_TARGET_DIR: /cache/target
 
 jobs:
-  # ── Build CI Docker image (pre-compiled deps for downstream jobs) ───
+  # ── Build CI Docker image (pre-compiled deps + project source) ──────
   build:
     name: Build CI Image
     runs-on: ubuntu-latest
@@ -93,8 +93,6 @@ jobs:
             target: thumbv6m-none-eabi
             cargo-features: "--no-default-features --features embedded,pico1w,transport-mqtt"
     steps:
-      - uses: actions/checkout@v6
-
       - name: Resolve host target
         id: host
         run: |
@@ -121,11 +119,9 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
-
       - name: Two transports must not compile
         run: |
-          cargo build --no-default-features \
+          cargo check --no-default-features \
             --features embedded,pico2w,transport-tcp,transport-websocket 2>&1 \
             | grep -q "mutually exclusive"
 
@@ -146,8 +142,6 @@ jobs:
           - board: pico1w
             cargo-features: "--features pico1w"
     steps:
-      - uses: actions/checkout@v6
-
       - name: Resolve host target
         id: host
         run: |
@@ -165,6 +159,8 @@ jobs:
         run: cargo test -p pico-socketeer-client --target ${{ steps.host.outputs.triple }}
 
   # ── Firmware build (gates on lint + tests passing) ─────────────────
+  # With pre-compiled source in the Docker image, cargo build here is a
+  # near-instant fingerprint check — the real work happened in the image.
   build-firmware:
     name: Build Firmware (${{ matrix.board }})
     needs: [build, lint, host-test]
@@ -208,8 +204,6 @@ jobs:
             flash-max: 2088960
             flash-desc: "2 MB"
     steps:
-      - uses: actions/checkout@v6
-
       - name: Build firmware (release)
         run: cargo build --release --target ${{ matrix.target }} ${{ matrix.cargo-features }}
 

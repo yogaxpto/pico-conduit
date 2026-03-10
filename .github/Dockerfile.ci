@@ -1,16 +1,19 @@
 # CI Docker image for pico-socketeer
 #
-# Contains the Rust toolchain, embedded targets, tools, and pre-compiled
-# dependency artifacts.  Downstream CI jobs use this as a container so they
-# start with deps ready — no cache restore or tool installation needed.
+# Contains the Rust toolchain, embedded targets, tools, pre-compiled
+# dependency artifacts, AND fully-built project source (clippy, build, tests).
+# Downstream CI jobs use this as a container and skip actions/checkout —
+# source is baked in at /src with matching cargo fingerprints in /cache/target.
 #
-# The image is rebuilt automatically when dependency-defining files change
-# (Cargo.toml, Cargo.lock, rust-toolchain.toml, etc.).
+# Layer caching strategy:
+#   - Dependency layers use the "dummy source" trick (cached when Cargo.lock unchanged)
+#   - Source layers rebuild every push, but reuse cached dep artifacts
+#   - sccache provides per-crate caching across Docker layer invalidations
 
 FROM rust:1-alpine
 
 # System deps:
-#   git       — required by actions/checkout inside container jobs
+#   git       — required by cargo for git dependencies
 #   binutils  — provides `size` (used in flash budget check)
 #   curl      — needed for cargo-binstall download
 RUN apk add --no-cache git binutils curl
@@ -114,10 +117,62 @@ RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
     && cargo test --no-run -p pico-socketeer-client \
        --target "$HOST_TRIPLE" --target-dir /cache/target 2>&1 || true
 
-# Clean up dummy source tree (keep only /cache/target).
+# Clean up dummy source tree (keep only /cache/target and host-env.sh).
+RUN rm -rf /tmp/deps
+
+# ---------- Pre-compile project source ----------------------------------------
+#
+# COPY the real source and compile all configurations.  Source changes invalidate
+# this layer, but dependency artifacts from the layers above remain cached.
+#
+# IMPORTANT: downstream CI jobs run with WORKDIR=/src and no actions/checkout,
+# so the cargo fingerprints (which embed the absolute source path) match.
+
+WORKDIR /src
+COPY . .
+
+# Embedded firmware: clippy + build for all 6 board×transport combinations
+RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
+    --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
+    set -e; \
+    for ARGS in \
+      "--release --target thumbv8m.main-none-eabihf" \
+      "--release --target thumbv8m.main-none-eabihf --no-default-features --features embedded,pico2w,transport-websocket" \
+      "--release --target thumbv8m.main-none-eabihf --no-default-features --features embedded,pico2w,transport-mqtt" \
+      "--release --target thumbv6m-none-eabi --no-default-features --features embedded,pico1w,transport-tcp" \
+      "--release --target thumbv6m-none-eabi --no-default-features --features embedded,pico1w,transport-websocket" \
+      "--release --target thumbv6m-none-eabi --no-default-features --features embedded,pico1w,transport-mqtt" \
+    ; do \
+      cargo clippy $ARGS --target-dir /cache/target -- -D warnings; \
+      cargo build $ARGS --target-dir /cache/target; \
+    done
+
+# Host tests: compile test binaries (don't run them)
+RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
+    --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
+    . /tmp/host-env.sh \
+    && cargo test --no-run --test host --no-default-features \
+       --target "$HOST_TRIPLE" --target-dir /cache/target \
+    && cargo test --no-run --test host --no-default-features --features pico2w \
+       --target "$HOST_TRIPLE" --target-dir /cache/target \
+    && cargo test --no-run --test host --no-default-features --features pico1w \
+       --target "$HOST_TRIPLE" --target-dir /cache/target \
+    && cargo test --no-run -p pico-socketeer-client \
+       --target "$HOST_TRIPLE" --target-dir /cache/target
+
+# Client + host clippy
+RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
+    --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
+    . /tmp/host-env.sh \
+    && cargo clippy -p pico-socketeer-client \
+       --target "$HOST_TRIPLE" --target-dir /cache/target -- -D warnings
+
+RUN rm -f /tmp/host-env.sh
+
 # Unset sccache wrapper — downstream CI jobs use pre-compiled artifacts from
 # /cache/target and don't need (or have credentials for) sccache.
-RUN rm -rf /tmp/deps /tmp/host-env.sh
 ENV RUSTC_WRAPPER=
 
-WORKDIR /
+# Downstream CI jobs run with WORKDIR=/src (source baked in from this commit).
+# No actions/checkout needed — cargo fingerprints match because the path is the same.
+WORKDIR /src
