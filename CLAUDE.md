@@ -31,8 +31,15 @@ Do not define new error string literals outside that catalogue.
 Always update `PROTOCOL.md` when adding new error codes.
 
 ### Single connection constraint
-The TCP server accepts exactly one client at a time.
+The TCP/WebSocket server accepts exactly one client at a time. The MQTT transport
+processes one command at a time (single-command-at-a-time over the broker).
 Do not add concurrency primitives that would allow simultaneous connections.
+
+### Transport feature flags are mutually exclusive
+Exactly one of `transport-tcp`, `transport-websocket`, or `transport-mqtt` must be
+enabled for embedded builds. Enabling two simultaneously triggers a `compile_error!`.
+The default feature set enables `transport-tcp`. Transport-specific code in `src/net.rs`
+is gated with `#[cfg(feature = "transport-*")]`.
 
 ## Code Conventions
 
@@ -70,3 +77,9 @@ Do not add concurrency primitives that would allow simultaneous connections.
   `memory.x`; do not remove them.
 - Stack overflow protection is provided by `flip-link`; never switch to a different linker
   without updating `.cargo/config.toml` and verifying the overflow protection still works.
+
+## Build Targets
+
+- **Pico 2W (default):** `thumbv8m.main-none-eabihf` — feature `pico2w`
+- **Pico W:** `thumbv6m-none-eabi` — feature `pico1w`
+- **Host tests:** `aarch64-unknown-linux-musl` (or native host triple) — no `embedded` feature

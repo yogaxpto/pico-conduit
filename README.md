@@ -1,8 +1,9 @@
 # pico-socketeer
 
 Rust firmware for the **Raspberry Pi Pico 2W** (RP2350 / CYW43439) and **Pico W** (RP2040 /
-CYW43439) that exposes a JSON-over-TCP socket server on port **4242**, allowing a remote client
-to read and write GPIO, UART, SPI, I2C, PWM, ADC, and USB peripherals.
+CYW43439) that exposes a JSON command/response protocol over one of three compile-time
+selectable transports — **TCP** (default), **WebSocket**, or **MQTT** — allowing a remote
+client to read and write GPIO, UART, SPI, I2C, PWM, ADC, and USB peripherals.
 
 ## Hardware You Need
 
@@ -93,12 +94,31 @@ make build BOARD=pico1w
 Or directly with cargo:
 
 ```sh
-# Pico 2W
+# Pico 2W (default: TCP on port 4242)
 cargo build --release --target thumbv8m.main-none-eabihf
 
 # Pico W
-cargo build --release --target thumbv6m-none-eabi --no-default-features --features embedded,pico1w
+cargo build --release --target thumbv6m-none-eabi --no-default-features --features embedded,pico1w,transport-tcp
 ```
+
+### Transport Feature Flags
+
+Exactly one transport must be enabled per build. The features are mutually exclusive.
+
+| Transport | Feature | Port/Broker | Build command (Pico 2W) |
+|-----------|---------|-------------|------------------------|
+| TCP (default) | `transport-tcp` | 4242 | `cargo build --release` |
+| WebSocket | `transport-websocket` | 4243 | `cargo build --release --no-default-features --features embedded,pico2w,transport-websocket` |
+| MQTT | `transport-mqtt` | broker (default 1883) | `cargo build --release --no-default-features --features embedded,pico2w,transport-mqtt` |
+
+For Pico W builds, replace `pico2w` with `pico1w` and use target `thumbv6m-none-eabi`.
+
+**MQTT** requires an external MQTT broker. The broker host and port are configured via the
+provisioning portal. The device subscribes to `pico/<mac>/cmd` and publishes responses to
+`pico/<mac>/resp` (where `<mac>` is the last 4 hex digits of the MAC address).
+
+**WebSocket** uses standard RFC 6455 text frames. Connect with any WebSocket client
+(e.g. `websocat ws://<pico-ip>:4243`).
 
 ### Flash (probe-rs)
 
@@ -141,11 +161,14 @@ PICO_WIFI_SSID=MyNetwork PICO_WIFI_PASS=secret cargo run --release --target thum
 ```
 src/
 ├── main.rs               # Embassy entry point — spawns tasks
-├── net.rs                # CYW43 init, TCP server, LED driver (embedded-only)
+├── net.rs                # CYW43 init, transport servers, LED driver (embedded-only)
 ├── lib.rs                # Library root (host + embedded)
 ├── board.rs              # Board-specific constants (flash size, chip ID)
 ├── protocol.rs           # JSON serialisation / deserialisation, framing
 ├── router.rs             # Command dispatcher (interface + action validation)
+├── transport.rs          # Transport trait (async read/write abstraction)
+├── ws.rs                 # WebSocket framing, SHA-1, accept key (no_std)
+├── mqtt.rs               # MQTT topic/client-id helpers, backoff (no_std)
 ├── led.rs                # LED state machine constants
 ├── interfaces/           # Per-peripheral handlers
 │   ├── gpio.rs
