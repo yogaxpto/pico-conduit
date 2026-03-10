@@ -26,6 +26,12 @@ pub struct DeviceState {
     pub config_ip: heapless::String<16>,
     /// Whether the device is currently connected to Wi-Fi.
     pub config_connected: bool,
+    /// MQTT broker host (populated by firmware when transport-mqtt is active).
+    #[cfg(feature = "transport-mqtt")]
+    pub config_mqtt_host: heapless::String<64>,
+    /// MQTT broker port (populated by firmware when transport-mqtt is active).
+    #[cfg(feature = "transport-mqtt")]
+    pub config_mqtt_port: u16,
     /// Set by `system/reboot_to_bootloader`; checked by `net.rs` after the response is flushed.
     pub pending_reboot: bool,
 }
@@ -40,6 +46,10 @@ impl Default for DeviceState {
             config_ssid: heapless::String::new(),
             config_ip: heapless::String::new(),
             config_connected: false,
+            #[cfg(feature = "transport-mqtt")]
+            config_mqtt_host: heapless::String::new(),
+            #[cfg(feature = "transport-mqtt")]
+            config_mqtt_port: 1883,
             pending_reboot: false,
         }
     }
@@ -169,6 +179,10 @@ pub fn dispatch<'a>(
                 ssid: state.config_ssid.clone(),
                 ip: state.config_ip.clone(),
                 connected: state.config_connected,
+                #[cfg(feature = "transport-mqtt")]
+                mqtt_host: state.config_mqtt_host.clone(),
+                #[cfg(feature = "transport-mqtt")]
+                mqtt_port: state.config_mqtt_port,
             }),
         ),
 

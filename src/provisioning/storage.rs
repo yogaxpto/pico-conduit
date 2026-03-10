@@ -17,15 +17,39 @@ pub struct Credentials {
     pub ssid: heapless::String<32>,
     /// Wi-Fi password (up to 64 bytes).
     pub password: heapless::String<64>,
+    /// MQTT broker host (up to 64 bytes). Empty string means MQTT is disabled.
+    pub mqtt_host: heapless::String<64>,
+    /// MQTT broker port. Default: 1883.
+    pub mqtt_port: u16,
 }
 
 impl Credentials {
     /// Create credentials from string slices.
     /// Returns `None` if either string exceeds the capacity.
+    /// MQTT fields default to empty host and port 1883.
     pub fn new(ssid: &str, password: &str) -> Option<Self> {
         let ssid = heapless::String::try_from(ssid).ok()?;
         let password = heapless::String::try_from(password).ok()?;
-        Some(Self { ssid, password })
+        Some(Self {
+            ssid,
+            password,
+            mqtt_host: heapless::String::new(),
+            mqtt_port: 1883,
+        })
+    }
+
+    /// Create credentials with MQTT broker configuration.
+    /// Returns `None` if any string exceeds its capacity.
+    pub fn with_mqtt(ssid: &str, password: &str, mqtt_host: &str, mqtt_port: u16) -> Option<Self> {
+        let ssid = heapless::String::try_from(ssid).ok()?;
+        let password = heapless::String::try_from(password).ok()?;
+        let mqtt_host = heapless::String::try_from(mqtt_host).ok()?;
+        Some(Self {
+            ssid,
+            password,
+            mqtt_host,
+            mqtt_port,
+        })
     }
 }
 

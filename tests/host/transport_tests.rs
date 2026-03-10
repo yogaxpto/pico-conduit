@@ -102,7 +102,7 @@ async fn handle_client_generic<T: Transport>(
     config_ssid: &heapless::String<32>,
     config_ip: &heapless::String<16>,
 ) {
-    use pico_socketeer::protocol::{parse_command, serialize_response, Response};
+    use pico_socketeer::protocol::{Response, parse_command, serialize_response};
 
     let mut frame_buf = [0u8; MAX_MSG_LEN];
     let mut resp_buf = [0u8; MAX_MSG_LEN];
@@ -159,7 +159,10 @@ fn mock_transport_single_command_roundtrip() {
 
         assert_eq!(transport.written.len(), 1, "expected exactly one response");
         let resp = core::str::from_utf8(&transport.written[0]).unwrap();
-        assert!(resp.contains("\"id\":\"t1\""), "response missing id: {resp}");
+        assert!(
+            resp.contains("\"id\":\"t1\""),
+            "response missing id: {resp}"
+        );
         assert!(resp.contains("\"ok\":true"), "response missing ok: {resp}");
         assert!(resp.ends_with('\n'), "response missing newline: {resp:?}");
     });
@@ -168,8 +171,7 @@ fn mock_transport_single_command_roundtrip() {
 #[test]
 fn mock_transport_disconnected_exits_cleanly() {
     pollster_block(async {
-        let mut transport =
-            MockTransport::from_results(vec![Err(TransportError::Disconnected)]);
+        let mut transport = MockTransport::from_results(vec![Err(TransportError::Disconnected)]);
         run_handle_client(&mut transport).await;
         assert!(transport.written.is_empty());
     });
@@ -187,9 +189,8 @@ fn mock_transport_timeout_exits_cleanly() {
 #[test]
 fn mock_transport_protocol_error_exits() {
     pollster_block(async {
-        let mut transport = MockTransport::from_results(vec![
-            Err(TransportError::Protocol(ERROR_MSG_TOO_LARGE)),
-        ]);
+        let mut transport =
+            MockTransport::from_results(vec![Err(TransportError::Protocol(ERROR_MSG_TOO_LARGE))]);
         run_handle_client(&mut transport).await;
         // Protocol error sends an error response then continues; next read returns Disconnected
         assert_eq!(transport.written.len(), 1);
@@ -216,7 +217,10 @@ fn mock_transport_multiple_commands() {
         for (i, written) in transport.written.iter().enumerate() {
             let resp = core::str::from_utf8(written).unwrap();
             let expected_id = format!("\"id\":\"{}\"", i + 1);
-            assert!(resp.contains(&expected_id), "response {i} missing id: {resp}");
+            assert!(
+                resp.contains(&expected_id),
+                "response {i} missing id: {resp}"
+            );
         }
     });
 }
@@ -251,7 +255,10 @@ fn mock_transport_reboot_flag_after_response() {
             "response should be written before returning"
         );
         let resp = core::str::from_utf8(&transport.written[0]).unwrap();
-        assert!(resp.contains("\"id\":\"r1\""), "response missing id: {resp}");
+        assert!(
+            resp.contains("\"id\":\"r1\""),
+            "response missing id: {resp}"
+        );
         assert!(resp.contains("\"ok\":true"), "expected ok:true: {resp}");
     });
 }
@@ -275,12 +282,8 @@ fn pollster_block<F: core::future::Future<Output = T>, T>(f: F) -> T {
 
 fn noop_waker() -> core::task::Waker {
     use core::task::{RawWaker, RawWakerVTable};
-    const VTABLE: RawWakerVTable = RawWakerVTable::new(
-        |p| RawWaker::new(p, &VTABLE),
-        |_| {},
-        |_| {},
-        |_| {},
-    );
+    const VTABLE: RawWakerVTable =
+        RawWakerVTable::new(|p| RawWaker::new(p, &VTABLE), |_| {}, |_| {}, |_| {});
     // SAFETY: the vtable is valid and the data pointer is never dereferenced.
     unsafe { core::task::Waker::from_raw(RawWaker::new(core::ptr::null(), &VTABLE)) }
 }

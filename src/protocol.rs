@@ -233,6 +233,10 @@ pub enum ResponseData {
         ssid: heapless::String<32>,
         ip: heapless::String<16>,
         connected: bool,
+        #[cfg(feature = "transport-mqtt")]
+        mqtt_host: heapless::String<64>,
+        #[cfg(feature = "transport-mqtt")]
+        mqtt_port: u16,
     },
     /// Firmware version report: `{"version": "0.1.0"}`.
     Version { version: heapless::String<16> },

@@ -229,6 +229,50 @@ fn parse_connect_form_duplicate_keys() {
     assert_eq!(form.password, "pass");
 }
 
+// ----- MQTT form fields -----
+
+#[test]
+fn form_parse_with_mqtt_host_and_port() {
+    let body = "ssid=Net&password=Pass&mqtt_host=192.168.1.1&mqtt_port=1883";
+    let form = parse_connect_form(body).unwrap();
+    assert_eq!(form.ssid, "Net");
+    assert_eq!(form.password, "Pass");
+    assert_eq!(form.mqtt_host, "192.168.1.1");
+    assert_eq!(form.mqtt_port, 1883);
+}
+
+#[test]
+fn form_parse_mqtt_host_empty() {
+    let body = "ssid=Net&password=Pass&mqtt_host=";
+    let form = parse_connect_form(body).unwrap();
+    assert_eq!(form.mqtt_host, "");
+    assert_eq!(form.mqtt_port, 1883); // default when absent
+}
+
+#[test]
+fn form_parse_mqtt_fields_missing() {
+    let body = "ssid=Net&password=Pass";
+    let form = parse_connect_form(body).unwrap();
+    assert_eq!(form.mqtt_host, "");
+    assert_eq!(form.mqtt_port, 1883);
+}
+
+#[test]
+fn form_parse_mqtt_port_non_numeric() {
+    let body = "ssid=Net&password=Pass&mqtt_port=abc";
+    let form = parse_connect_form(body).unwrap();
+    assert_eq!(form.mqtt_port, 1883); // defaults gracefully
+}
+
+#[test]
+fn form_parse_mqtt_host_percent_encoded() {
+    let raw_body = b"ssid=Net&password=Pass&mqtt_host=my%2Ebroker%2Ecom";
+    let mut dec_buf = [0u8; 128];
+    let decoded = decode_url_encoded(raw_body, &mut dec_buf).unwrap();
+    let form = parse_connect_form(decoded).unwrap();
+    assert_eq!(form.mqtt_host, "my.broker.com");
+}
+
 // ----- Request line edge cases -----
 
 #[test]

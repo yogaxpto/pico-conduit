@@ -71,12 +71,17 @@ pub fn parse_request_line(line: &[u8]) -> Result<RequestLine<'_>, ParseError> {
 pub struct ConnectForm<'a> {
     pub ssid: &'a str,
     pub password: &'a str,
+    /// MQTT broker host. Empty string means MQTT is disabled.
+    pub mqtt_host: &'a str,
+    /// MQTT broker port. Defaults to 1883 if not provided or invalid.
+    pub mqtt_port: u16,
 }
 
 /// Parse an `application/x-www-form-urlencoded` body.
 ///
 /// Extracts `ssid` and `password` fields (in any order).
 /// Both fields are required; missing either returns [`ParseError::MissingFormField`].
+/// Optional `mqtt_host` and `mqtt_port` fields default to `""` and `1883` respectively.
 ///
 /// Percent-decoding is performed in-place using `decode_url_encoded`.
 ///
@@ -87,6 +92,8 @@ pub struct ConnectForm<'a> {
 pub fn parse_connect_form<'a>(decoded: &'a str) -> Result<ConnectForm<'a>, ParseError> {
     let mut ssid = None;
     let mut password = None;
+    let mut mqtt_host = "";
+    let mut mqtt_port: u16 = 1883;
 
     for pair in decoded.split('&') {
         let mut kv = pair.splitn(2, '=');
@@ -95,6 +102,13 @@ pub fn parse_connect_form<'a>(decoded: &'a str) -> Result<ConnectForm<'a>, Parse
         match key {
             "ssid" => ssid = Some(val),
             "password" => password = Some(val),
+            "mqtt_host" => mqtt_host = val,
+            "mqtt_port" => {
+                if let Ok(p) = val.parse::<u16>() {
+                    mqtt_port = p;
+                }
+                // Non-numeric or empty: keep default 1883
+            }
             _ => {} // unknown fields are ignored
         }
     }
@@ -102,6 +116,8 @@ pub fn parse_connect_form<'a>(decoded: &'a str) -> Result<ConnectForm<'a>, Parse
     Ok(ConnectForm {
         ssid: ssid.ok_or(ParseError::MissingFormField)?,
         password: password.ok_or(ParseError::MissingFormField)?,
+        mqtt_host,
+        mqtt_port,
     })
 }
 

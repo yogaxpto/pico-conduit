@@ -79,3 +79,44 @@ fn credentials_empty_password_succeeds() {
     let creds = Credentials::new("OpenNet", "").unwrap();
     assert_eq!(creds.password.as_str(), "");
 }
+
+// ----- MQTT credential fields -----
+
+#[test]
+fn credentials_new_defaults_mqtt_fields() {
+    let creds = Credentials::new("ssid", "pass").unwrap();
+    assert_eq!(creds.mqtt_host.as_str(), "");
+    assert_eq!(creds.mqtt_port, 1883);
+}
+
+#[test]
+fn credentials_mqtt_host_exactly_64_chars() {
+    let host = "H".repeat(64);
+    let creds = Credentials::with_mqtt("ssid", "pass", &host, 1883).unwrap();
+    assert_eq!(creds.mqtt_host.len(), 64);
+}
+
+#[test]
+fn credentials_mqtt_host_65_chars_rejected() {
+    let host = "H".repeat(65);
+    assert!(Credentials::with_mqtt("ssid", "pass", &host, 1883).is_none());
+}
+
+#[test]
+fn credentials_mqtt_host_empty_is_valid() {
+    let creds = Credentials::with_mqtt("ssid", "pass", "", 1883).unwrap();
+    assert_eq!(creds.mqtt_host.as_str(), "");
+}
+
+#[test]
+fn credentials_mqtt_port_default_1883() {
+    let creds = Credentials::new("ssid", "pass").unwrap();
+    assert_eq!(creds.mqtt_port, 1883);
+}
+
+#[test]
+fn credentials_mqtt_port_custom() {
+    let creds = Credentials::with_mqtt("ssid", "pass", "broker.local", 8883).unwrap();
+    assert_eq!(creds.mqtt_port, 8883);
+    assert_eq!(creds.mqtt_host.as_str(), "broker.local");
+}

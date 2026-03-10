@@ -18,6 +18,7 @@ pico2w = ["embassy-rp/rp235xa"]
 pico1w = ["embassy-rp/rp2040"]
 transport-tcp = []
 transport-websocket = []
+transport-mqtt = []
 
 [[bin]]
 name = "pico-socketeer"

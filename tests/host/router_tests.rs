@@ -409,6 +409,25 @@ fn dispatch_pwm_set_duty_missing_channel() {
 }
 
 #[test]
+#[test]
+#[cfg(not(feature = "transport-mqtt"))]
+fn config_get_excludes_mqtt_fields_without_feature() {
+    // Without transport-mqtt feature, config/get response should NOT contain mqtt_host
+    let mut state = DeviceState::default();
+    let _ = state.config_ssid.push_str("TestNet");
+    let cmd = make_cmd("mqtt1", Some("config"), Some("get"));
+    let resp = dispatch(&cmd, ("config", "get"), &mut state);
+    assert!(resp.ok);
+    let mut buf = [0u8; 512];
+    let n = pico_socketeer::protocol::serialize_response(&resp, &mut buf).unwrap();
+    let s = core::str::from_utf8(&buf[..n]).unwrap();
+    assert!(
+        !s.contains("mqtt_host"),
+        "config/get should not include mqtt_host without transport-mqtt feature: {s}"
+    );
+}
+
+#[test]
 fn dispatch_pwm_set_freq_zero() {
     let mut state = DeviceState::default();
     let mut cmd = make_cmd("d18", Some("pwm"), Some("set_freq"));

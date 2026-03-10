@@ -72,10 +72,12 @@ const TCP_READ_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_RECONNECT_SECS: u16 = 600; // 10 minutes
 
 // ── Flash credential storage constants ───────────────────────────────────────
-/// Magic sentinel stored in the first 4 bytes of a valid credential record.
-const CRED_MAGIC: u32 = 0xC0FF_EE42;
-/// Record layout: magic(4) + ssid_len(1) + pwd_len(1) + ssid(32) + pwd(64) = 102 bytes.
-const CRED_RECORD_SIZE: usize = 102;
+/// Magic sentinel v2 — includes MQTT broker fields.
+/// Old v1 magic (0xC0FF_EE42) is treated as missing credentials (re-provision).
+const CRED_MAGIC: u32 = 0xC0FF_EE43;
+/// Record layout v2: magic(4) + ssid_len(1) + pwd_len(1) + ssid(32) + pwd(64)
+///   + mqtt_host_len(1) + mqtt_host(64) + mqtt_port(2) = 169 bytes.
+const CRED_RECORD_SIZE: usize = 169;
 
 // ── TcpTransport ─────────────────────────────────────────────────────────────
 
@@ -283,6 +285,7 @@ fn load_credentials_flash(flash: &mut CredFlash) -> Option<Credentials> {
 
     let magic = u32::from_le_bytes([buf[0], buf[1], buf[2], buf[3]]);
     if magic != CRED_MAGIC {
+        // Old v1 magic (0xC0FF_EE42) or blank flash — treat as missing
         return None;
     }
 
@@ -294,7 +297,16 @@ fn load_credentials_flash(flash: &mut CredFlash) -> Option<Credentials> {
 
     let ssid = core::str::from_utf8(&buf[6..6 + ssid_len]).ok()?;
     let pwd = core::str::from_utf8(&buf[38..38 + pwd_len]).ok()?;
-    Credentials::new(ssid, pwd)
+
+    // v2 fields: mqtt_host_len at offset 102, mqtt_host at 103, mqtt_port at 167
+    let mqtt_host_len = buf[102] as usize;
+    if mqtt_host_len > 64 {
+        return None;
+    }
+    let mqtt_host = core::str::from_utf8(&buf[103..103 + mqtt_host_len]).ok()?;
+    let mqtt_port = u16::from_le_bytes([buf[167], buf[168]]);
+
+    Credentials::with_mqtt(ssid, pwd, mqtt_host, mqtt_port)
 }
 
 /// Erase the sector and write a credential record to the CREDENTIALS flash region.
@@ -316,6 +328,12 @@ fn save_credentials_flash(flash: &mut CredFlash, creds: &Credentials) -> bool {
     buf[5] = pwd_b.len() as u8;
     buf[6..6 + ssid_b.len()].copy_from_slice(ssid_b);
     buf[38..38 + pwd_b.len()].copy_from_slice(pwd_b);
+
+    // v2 MQTT fields
+    let mqtt_host_b = creds.mqtt_host.as_bytes();
+    buf[102] = mqtt_host_b.len() as u8;
+    buf[103..103 + mqtt_host_b.len()].copy_from_slice(mqtt_host_b);
+    buf[167..169].copy_from_slice(&creds.mqtt_port.to_le_bytes());
 
     flash.write(CRED_FLASH_OFFSET, &buf).is_ok()
 }
@@ -1328,8 +1346,11 @@ async fn handle_http_request(
                     // Copy to owned buffers (form borrows dec_buf which is local)
                     let mut ssid_buf: heapless::String<32> = heapless::String::new();
                     let mut pwd_buf: heapless::String<64> = heapless::String::new();
+                    let mut mqtt_host_buf: heapless::String<64> = heapless::String::new();
                     let _ = ssid_buf.push_str(form.ssid);
                     let _ = pwd_buf.push_str(form.password);
+                    let _ = mqtt_host_buf.push_str(form.mqtt_host);
+                    let mqtt_port = form.mqtt_port;
 
                     // Serve "Testing…" page with auto-refresh
                     send_http(
@@ -1344,7 +1365,16 @@ async fn handle_http_request(
                     .await;
                     let _ = socket.flush().await;
 
-                    handle_provision(socket, &ssid_buf, &pwd_buf, flash, watchdog).await;
+                    handle_provision(
+                        socket,
+                        &ssid_buf,
+                        &pwd_buf,
+                        &mqtt_host_buf,
+                        mqtt_port,
+                        flash,
+                        watchdog,
+                    )
+                    .await;
                 }
                 None => {
                     send_http(
@@ -1419,6 +1449,11 @@ async fn serve_scan_form(socket: &mut TcpSocket<'_>, _ap_ssid: &str) {
         <label>Manual SSID (leave blank to use selection above):<br>\
         <input type=\"text\" name=\"ssid_manual\"></label><br>\
         <label>Password:<br><input type=\"password\" name=\"password\"></label><br>\
+        <hr><h2>MQTT (optional)</h2>\
+        <label>Broker Host:<br><input type=\"text\" name=\"mqtt_host\" \
+        placeholder=\"e.g. 192.168.1.100\"></label><br>\
+        <label>Broker Port:<br><input type=\"number\" name=\"mqtt_port\" \
+        value=\"1883\" min=\"1\" max=\"65535\"></label><br>\
         <input type=\"submit\" value=\"Connect\">\
         </form></body></html>",
         )
@@ -1430,6 +1465,8 @@ async fn handle_provision(
     _socket: &mut TcpSocket<'_>,
     ssid: &str,
     password: &str,
+    mqtt_host: &str,
+    mqtt_port: u16,
     flash: &mut CredFlash,
     watchdog: &mut Watchdog,
 ) {
@@ -1461,7 +1498,7 @@ async fn handle_provision(
     };
 
     if joined {
-        if let Some(creds) = Credentials::new(ssid, password)
+        if let Some(creds) = Credentials::with_mqtt(ssid, password, mqtt_host, mqtt_port)
             && save_credentials_flash(flash, &creds)
         {
             LED_SIGNAL.signal(LedState::Saving);
