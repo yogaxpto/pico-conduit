@@ -7,8 +7,10 @@ fn tcp_nodelay_is_enabled() {
 
 #[cfg(feature = "pico2w")]
 mod pico2w {
+    use fixed::FixedU32;
+    use fixed::types::extra::U8;
     use pico_socketeer::board::{
-        CRED_FLASH_OFFSET, CRED_REGION_SIZE, FLASH_SIZE, validate_chip_part,
+        CRED_FLASH_OFFSET, CRED_REGION_SIZE, CYW43_CLOCK_DIVIDER, FLASH_SIZE, validate_chip_part,
     };
 
     #[test]
@@ -40,12 +42,37 @@ mod pico2w {
     fn validate_wrong_chip_part_garbage() {
         assert!(validate_chip_part(0xFF).is_err());
     }
+
+    #[test]
+    fn cyc43_clock_divider_is_faster_than_default() {
+        // DEFAULT_CLOCK_DIVIDER = 0x0200 (divider 2.0 → ~37.5 MHz SPI)
+        // CYW43_CLOCK_DIVIDER   = 0x0180 (divider 1.5 → ~50 MHz SPI)
+        // Smaller raw bits = smaller divisor = higher SPI clock
+        let default = FixedU32::<U8>::from_bits(0x0200);
+        assert!(
+            CYW43_CLOCK_DIVIDER < default,
+            "Pico 2W clock divider must be smaller than default to increase SPI speed"
+        );
+    }
+
+    #[test]
+    fn cyc43_clock_divider_does_not_exceed_chip_max() {
+        // CYW43439 SPI max is 50 MHz; at 150 MHz sys clock, minimum safe divider is 1.5.
+        // Raw bits 0x0180 == FixedU32<U8>(1.5). Anything smaller would exceed the chip rating.
+        let min_safe = FixedU32::<U8>::from_bits(0x0180);
+        assert!(
+            CYW43_CLOCK_DIVIDER >= min_safe,
+            "Clock divider too small; SPI clock would exceed CYW43439 50 MHz rating"
+        );
+    }
 }
 
 #[cfg(feature = "pico1w")]
 mod pico1w {
+    use fixed::FixedU32;
+    use fixed::types::extra::U8;
     use pico_socketeer::board::{
-        CRED_FLASH_OFFSET, CRED_REGION_SIZE, FLASH_SIZE, validate_chip_part,
+        CRED_FLASH_OFFSET, CRED_REGION_SIZE, CYW43_CLOCK_DIVIDER, FLASH_SIZE, validate_chip_part,
     };
 
     #[test]
@@ -76,5 +103,27 @@ mod pico1w {
     #[test]
     fn validate_wrong_chip_part_garbage() {
         assert!(validate_chip_part(0xFF).is_err());
+    }
+
+    #[test]
+    fn cyc43_clock_divider_is_faster_than_default() {
+        // DEFAULT_CLOCK_DIVIDER = 0x0200 (divider 2.0 → ~31 MHz SPI)
+        // CYW43_CLOCK_DIVIDER   = 0x0140 (divider 1.25 → ~50 MHz SPI)
+        let default = FixedU32::<U8>::from_bits(0x0200);
+        assert!(
+            CYW43_CLOCK_DIVIDER < default,
+            "Pico W clock divider must be smaller than default to increase SPI speed"
+        );
+    }
+
+    #[test]
+    fn cyc43_clock_divider_does_not_exceed_chip_max() {
+        // CYW43439 SPI max is 50 MHz; at 125 MHz sys clock, minimum safe divider is 1.25.
+        // Raw bits 0x0140 == FixedU32<U8>(1.25).
+        let min_safe = FixedU32::<U8>::from_bits(0x0140);
+        assert!(
+            CYW43_CLOCK_DIVIDER >= min_safe,
+            "Clock divider too small; SPI clock would exceed CYW43439 50 MHz rating"
+        );
     }
 }

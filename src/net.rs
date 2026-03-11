@@ -416,7 +416,9 @@ pub async fn start(spawner: Spawner, p: embassy_rp::Peripherals) {
     let spi = cyw43_pio::PioSpi::new(
         &mut pio.common,
         pio.sm0,
-        cyw43_pio::DEFAULT_CLOCK_DIVIDER,
+        // CYW43_CLOCK_DIVIDER raises the SPI clock from ~37.5 MHz (default) to ~50 MHz,
+        // reducing per-packet SPI transfer time by ~25%. See src/board.rs for derivation.
+        pico_socketeer::board::CYW43_CLOCK_DIVIDER,
         pio.irq0,
         cs,
         p.PIN_24,

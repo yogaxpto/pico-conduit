@@ -3,6 +3,9 @@
 //! These values are compile-time constants that compile on both the embedded
 //! target and the host test runner.
 
+use fixed::FixedU32;
+use fixed::types::extra::U8;
+
 /// Total flash size for the active board variant (see `memory-pico*.x`).
 #[cfg(feature = "pico2w")]
 pub const FLASH_SIZE: usize = 4 * 1024 * 1024;
@@ -19,6 +22,22 @@ pub const CRED_FLASH_OFFSET: u32 = (FLASH_SIZE - CRED_REGION_SIZE) as u32;
 
 /// TCP port for the JSON-over-TCP command interface.
 pub const TCP_PORT: u16 = 4242;
+
+/// CYW43439 SPI PIO clock divider for the Pico 2W (RP2350, 150 MHz system clock).
+///
+/// `0x0180` = 1.5 in `FixedU32<U8>` format → PIO clock = 150 / 1.5 = 100 MHz →
+/// SPI SCK ≈ 50 MHz (PIO SPI uses two PIO cycles per SCK period).
+/// Conservative step up from `DEFAULT_CLOCK_DIVIDER` (0x0200 → 37.5 MHz SPI).
+/// If instability is observed, back off to `0x01C0` (1.75 → ~43 MHz SPI).
+#[cfg(feature = "pico2w")]
+pub const CYW43_CLOCK_DIVIDER: FixedU32<U8> = FixedU32::from_bits(0x0180);
+
+/// CYW43439 SPI PIO clock divider for the Pico W (RP2040, 125 MHz system clock).
+///
+/// `0x0140` = 1.25 in `FixedU32<U8>` format → PIO clock = 125 / 1.25 = 100 MHz →
+/// SPI SCK ≈ 50 MHz. Conservative step up from `DEFAULT_CLOCK_DIVIDER` (0x0200 → 31 MHz SPI).
+#[cfg(feature = "pico1w")]
+pub const CYW43_CLOCK_DIVIDER: FixedU32<U8> = FixedU32::from_bits(0x0140);
 
 /// Whether to disable Nagle's algorithm (TCP_NODELAY) on all TCP sockets.
 ///

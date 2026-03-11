@@ -52,6 +52,10 @@ embedded-storage = "0.3"
 # On aarch64 the native atomics are used; the crate still compiles fine.
 portable-atomic = { version = "1.5", features = ["critical-section"] }
 
+# Fixed-point arithmetic — provides FixedU32<U8> used for CYW43 SPI clock divider.
+# no_std compatible; compiles on both the embedded target and the host test runner.
+fixed = { version = "1", default-features = false }
+
 # ── Embedded-only deps ───────────────────────────────────────────────────────
 # Gated to `target_os = "none"` so they are NEVER compiled during host tests.
 # All deps that require Cortex-M, RTT, PIO, or board-specific hardware go here.
