@@ -6,8 +6,10 @@
 
 use crate::interfaces::{i2c, pwm, spi, uart, usb};
 use crate::protocol::{
-    BatchResponse, Command, ERROR_BATCH_EMPTY, ERROR_BATCH_TOO_LARGE, ERROR_NOT_CONFIGURED,
-    ERROR_UNKNOWN_ACTION, ERROR_UNKNOWN_INTERFACE, MAX_BATCH_SIZE, Response, ResponseData,
+    AdcChannel, BatchResponse, Command, EdgeTrigger, ERROR_ALREADY_SUBSCRIBED, ERROR_BATCH_EMPTY,
+    ERROR_BATCH_TOO_LARGE, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_NOT_SUBSCRIBED,
+    ERROR_SUBSCRIPTION_LIMIT, ERROR_UNKNOWN_ACTION, ERROR_UNKNOWN_INTERFACE, MAX_BATCH_SIZE,
+    MAX_SUBSCRIPTIONS, Response, ResponseData, Subscription, SubscriptionTarget,
 };
 use core::fmt::Write as _;
 
@@ -34,6 +36,8 @@ pub struct DeviceState {
     pub config_mqtt_port: u16,
     /// Set by `system/reboot_to_bootloader`; checked by `net.rs` after the response is flushed.
     pub pending_reboot: bool,
+    /// Active push subscriptions. Cleared on disconnect (DeviceState is dropped).
+    pub subscriptions: heapless::Vec<Subscription, MAX_SUBSCRIPTIONS>,
 }
 
 impl Default for DeviceState {
@@ -51,6 +55,7 @@ impl Default for DeviceState {
             #[cfg(feature = "transport-mqtt")]
             config_mqtt_port: 1883,
             pending_reboot: false,
+            subscriptions: heapless::Vec::new(),
         }
     }
 }
@@ -58,12 +63,12 @@ impl Default for DeviceState {
 /// Routing table: each entry maps an interface name to its valid actions.
 /// To add a new interface, add one row here — no other code in this file changes.
 static VALID_ROUTES: &[(&str, &[&str])] = &[
-    ("gpio", &["read", "write", "set_mode"]),
+    ("gpio", &["read", "write", "set_mode", "subscribe", "unsubscribe"]),
     ("uart", &["read", "write", "configure"]),
     ("spi", &["transfer", "write", "configure"]),
     ("i2c", &["read", "write", "write_read", "configure"]),
     ("pwm", &["set_duty", "set_freq", "enable", "disable"]),
-    ("adc", &["read"]),
+    ("adc", &["read", "subscribe", "unsubscribe"]),
     ("usb", &["read", "write"]),
     ("config", &["get"]),
     ("system", &["get_version", "reboot_to_bootloader"]),
@@ -141,12 +146,50 @@ pub fn dispatch<'a>(
             // Needs actual InputPin/OutputPin hardware — stub returns not_configured.
             Response::error(cmd.id, ERROR_NOT_CONFIGURED)
         }
+        ("gpio", "subscribe") => {
+            let pin = match cmd.pin {
+                Some(p) => p,
+                None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+            };
+            if let Some(trigger_str) = cmd.trigger {
+                let trigger = match EdgeTrigger::from_str(trigger_str) {
+                    Some(t) => t,
+                    None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+                };
+                handle_subscribe(cmd.id, SubscriptionTarget::GpioEdge { pin, trigger }, state)
+            } else {
+                let interval_ms = cmd.interval_ms.unwrap_or(100);
+                handle_subscribe(cmd.id, SubscriptionTarget::GpioLevel { pin, interval_ms }, state)
+            }
+        }
+        ("gpio", "unsubscribe") => {
+            let pin = match cmd.pin {
+                Some(p) => p,
+                None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+            };
+            handle_unsubscribe_gpio(cmd.id, pin, state)
+        }
 
         // ---- ADC ----
         ("adc", "read") => match crate::interfaces::adc::validate_read(cmd) {
             Ok(_channel) => Response::error(cmd.id, ERROR_NOT_CONFIGURED),
             Err(r) => r,
         },
+        ("adc", "subscribe") => {
+            let channel = match cmd.adc_channel {
+                Some(ch) => ch,
+                None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+            };
+            let interval_ms = cmd.interval_ms.unwrap_or(100);
+            handle_subscribe(cmd.id, SubscriptionTarget::Adc { channel, interval_ms }, state)
+        }
+        ("adc", "unsubscribe") => {
+            let channel = match cmd.adc_channel {
+                Some(ch) => ch,
+                None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+            };
+            handle_unsubscribe_adc(cmd.id, channel, state)
+        }
 
         // ---- UART ----
         ("uart", "configure") => configure!(uart::handle_configure, cmd.uart, state.uart),
@@ -263,4 +306,64 @@ pub fn dispatch_batch<'a>(cmd: &Command<'a>, state: &mut DeviceState) -> BatchRe
         responses,
         error: None,
     }
+}
+
+// ── Subscription helpers ──────────────────────────────────────────────────────
+
+/// Register a new push subscription. Returns error if the limit is exceeded or a duplicate exists.
+fn handle_subscribe<'a>(
+    id: &'a str,
+    target: SubscriptionTarget,
+    state: &mut DeviceState,
+) -> Response<'a> {
+    // Reject duplicates (same target regardless of id or interval).
+    if state.subscriptions.iter().any(|s| s.same_target(&target)) {
+        return Response::error(id, ERROR_ALREADY_SUBSCRIBED);
+    }
+    if state.subscriptions.len() >= MAX_SUBSCRIPTIONS {
+        return Response::error(id, ERROR_SUBSCRIPTION_LIMIT);
+    }
+    let mut sub_id: heapless::String<32> = heapless::String::new();
+    let _ = sub_id.push_str(id);
+    let sub = Subscription { id: sub_id, target };
+    let _ = state.subscriptions.push(sub);
+    Response::ok(id, None)
+}
+
+/// Remove an ADC subscription by channel. Returns `not_subscribed` if none found.
+fn handle_unsubscribe_adc<'a>(
+    id: &'a str,
+    channel: AdcChannel,
+    state: &mut DeviceState,
+) -> Response<'a> {
+    let before = state.subscriptions.len();
+    state.subscriptions.retain(|s| {
+        if let SubscriptionTarget::Adc { channel: c, .. } = &s.target {
+            *c != channel
+        } else {
+            true
+        }
+    });
+    if state.subscriptions.len() == before {
+        return Response::error(id, ERROR_NOT_SUBSCRIBED);
+    }
+    Response::ok(id, None)
+}
+
+/// Remove a GPIO subscription (level or edge) by pin. Returns `not_subscribed` if none found.
+fn handle_unsubscribe_gpio<'a>(
+    id: &'a str,
+    pin: u8,
+    state: &mut DeviceState,
+) -> Response<'a> {
+    let before = state.subscriptions.len();
+    state.subscriptions.retain(|s| match &s.target {
+        SubscriptionTarget::GpioLevel { pin: p, .. } => *p != pin,
+        SubscriptionTarget::GpioEdge { pin: p, .. } => *p != pin,
+        _ => true,
+    });
+    if state.subscriptions.len() == before {
+        return Response::error(id, ERROR_NOT_SUBSCRIBED);
+    }
+    Response::ok(id, None)
 }

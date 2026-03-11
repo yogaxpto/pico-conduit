@@ -45,6 +45,10 @@ pub const MAX_B64_LEN: usize = (MAX_PAYLOAD_LEN / 3 + 1) * 4;
 /// Batches with more commands are rejected with [`ERROR_BATCH_TOO_LARGE`].
 pub const MAX_BATCH_SIZE: usize = 16;
 
+/// Maximum number of concurrent push subscriptions.
+/// Exceeding this limit returns [`ERROR_SUBSCRIPTION_LIMIT`].
+pub const MAX_SUBSCRIPTIONS: usize = 8;
+
 // --- Error code constants ---
 // All error strings are &'static str — part of the v1 protocol stability contract.
 // New codes may be added; existing codes must not be renamed.
@@ -66,6 +70,9 @@ pub const ERROR_INVALID_ENCODING: &str = "invalid_encoding";
 pub const ERROR_WEBSOCKET_HANDSHAKE: &str = "ws_handshake_failed";
 pub const ERROR_BATCH_TOO_LARGE: &str = "batch_too_large";
 pub const ERROR_BATCH_EMPTY: &str = "batch_empty";
+pub const ERROR_SUBSCRIPTION_LIMIT: &str = "subscription_limit";
+pub const ERROR_ALREADY_SUBSCRIBED: &str = "already_subscribed";
+pub const ERROR_NOT_SUBSCRIBED: &str = "not_subscribed";
 
 /// ADC channel selector.
 ///
@@ -142,6 +149,10 @@ pub struct CommandInner<'a> {
     pub channel: Option<u8>,
     pub duty_u16: Option<u16>,
     pub adc_channel: Option<AdcChannel>,
+    /// Push subscription interval in milliseconds (subscribe actions).
+    pub interval_ms: Option<u32>,
+    /// GPIO edge trigger: `"edge_rising"`, `"edge_falling"`, or `"edge_both"`.
+    pub trigger: Option<&'a str>,
 }
 
 impl<'a> CommandInner<'a> {
@@ -174,6 +185,8 @@ impl<'a> CommandInner<'a> {
             channel: self.channel,
             duty_u16: self.duty_u16,
             adc_channel: self.adc_channel,
+            interval_ms: self.interval_ms,
+            trigger: self.trigger,
             commands: None,
         }
     }
@@ -260,6 +273,12 @@ pub struct Command<'a> {
     // --- ADC (separate field to avoid name collision with PWM channel) ---
     /// ADC channel: 0, 1, 2, or `"temp"` for the onboard temperature sensor.
     pub adc_channel: Option<AdcChannel>,
+
+    // --- Subscriptions ---
+    /// Push subscription interval in milliseconds (`subscribe` actions).
+    pub interval_ms: Option<u32>,
+    /// GPIO edge trigger: `"edge_rising"`, `"edge_falling"`, or `"edge_both"` (`gpio/subscribe`).
+    pub trigger: Option<&'a str>,
 
     // --- Batch ---
     /// Inner commands for a `batch/run` request. `None` for all other interfaces.
@@ -445,6 +464,69 @@ impl FrameReader {
 impl Default for FrameReader {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+// ── Subscription types ────────────────────────────────────────────────────────
+
+/// GPIO edge trigger selector for `gpio/subscribe`.
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum EdgeTrigger {
+    Rising,
+    Falling,
+    Both,
+}
+
+impl EdgeTrigger {
+    /// Parse from the wire string (`"edge_rising"`, `"edge_falling"`, `"edge_both"`).
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "edge_rising" => Some(Self::Rising),
+            "edge_falling" => Some(Self::Falling),
+            "edge_both" => Some(Self::Both),
+            _ => None,
+        }
+    }
+}
+
+/// What a subscription is watching.
+#[derive(Debug, PartialEq, Clone)]
+pub enum SubscriptionTarget {
+    /// ADC channel polled at `interval_ms` rate.
+    Adc { channel: AdcChannel, interval_ms: u32 },
+    /// GPIO pin polled at `interval_ms` rate.
+    GpioLevel { pin: u8, interval_ms: u32 },
+    /// GPIO pin edge-triggered (no interval — fires on hardware event).
+    GpioEdge { pin: u8, trigger: EdgeTrigger },
+}
+
+/// An active push subscription entry stored in [`crate::router::DeviceState`].
+#[derive(Debug, Clone)]
+pub struct Subscription {
+    /// Response ID echoed in every push message for this subscription.
+    pub id: heapless::String<32>,
+    pub target: SubscriptionTarget,
+}
+
+impl Subscription {
+    /// Return `true` if this subscription covers the same target as `other`.
+    /// Used to detect duplicates (same channel/pin regardless of id or interval).
+    pub fn same_target(&self, other: &SubscriptionTarget) -> bool {
+        match (&self.target, other) {
+            (
+                SubscriptionTarget::Adc { channel: a, .. },
+                SubscriptionTarget::Adc { channel: b, .. },
+            ) => a == b,
+            (
+                SubscriptionTarget::GpioLevel { pin: a, .. },
+                SubscriptionTarget::GpioLevel { pin: b, .. },
+            ) => a == b,
+            (
+                SubscriptionTarget::GpioEdge { pin: a, .. },
+                SubscriptionTarget::GpioEdge { pin: b, .. },
+            ) => a == b,
+            _ => false,
+        }
     }
 }
 

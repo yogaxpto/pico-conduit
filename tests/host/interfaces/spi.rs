@@ -31,6 +31,8 @@ fn make_spi_cmd<'a>(id: &'a str, action: &'a str, spi: Option<u8>) -> Command<'a
         channel: None,
         duty_u16: None,
         adc_channel: None,
+        interval_ms: None,
+        trigger: None,
         commands: None,
     }
 }

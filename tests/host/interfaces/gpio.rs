@@ -33,6 +33,8 @@ fn make_cmd_write<'a>(id: &'a str, pin: Option<u8>, value: Option<u8>) -> Comman
         channel: None,
         duty_u16: None,
         adc_channel: None,
+        interval_ms: None,
+        trigger: None,
         commands: None,
     }
 }

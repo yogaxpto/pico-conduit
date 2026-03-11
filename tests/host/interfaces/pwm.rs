@@ -38,6 +38,8 @@ fn make_pwm_cmd<'a>(
         channel,
         duty_u16,
         adc_channel: None,
+        interval_ms: None,
+        trigger: None,
         commands: None,
     }
 }

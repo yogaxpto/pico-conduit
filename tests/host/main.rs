@@ -11,5 +11,6 @@ mod protocol_tests;
 mod router_tests;
 mod storage_tests;
 mod system_tests;
+mod subscription_tests;
 mod transport_tests;
 mod ws_tests;

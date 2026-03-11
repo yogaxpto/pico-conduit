@@ -31,6 +31,8 @@ fn make_adc_cmd<'a>(id: &'a str, channel: Option<AdcChannel>) -> Command<'a> {
         channel: None,
         duty_u16: None,
         adc_channel: channel,
+        interval_ms: None,
+        trigger: None,
         commands: None,
     }
 }
