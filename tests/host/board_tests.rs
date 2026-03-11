@@ -1,8 +1,39 @@
-use pico_socketeer::board::TCP_NODELAY;
+use pico_socketeer::board::{TCP_NODELAY, TCP_RX_BUF_SIZE, TCP_TX_BUF_SIZE};
+use pico_socketeer::protocol::MAX_MSG_LEN;
 
 #[test]
 fn tcp_nodelay_is_enabled() {
     assert!(TCP_NODELAY, "TCP_NODELAY must be true to eliminate Nagle delay");
+}
+
+#[test]
+fn tcp_rx_buf_exceeds_max_msg_len() {
+    assert!(
+        TCP_RX_BUF_SIZE > MAX_MSG_LEN,
+        "RX buffer must exceed MAX_MSG_LEN to allow headroom for TCP overhead"
+    );
+}
+
+#[test]
+fn tcp_tx_buf_exceeds_max_msg_len() {
+    assert!(
+        TCP_TX_BUF_SIZE > MAX_MSG_LEN,
+        "TX buffer must exceed MAX_MSG_LEN to avoid stalls on large responses"
+    );
+}
+
+#[test]
+fn tcp_buf_sizes_are_power_of_two() {
+    assert_eq!(
+        TCP_RX_BUF_SIZE & (TCP_RX_BUF_SIZE - 1),
+        0,
+        "TCP_RX_BUF_SIZE should be a power of two for efficient ring-buffer arithmetic"
+    );
+    assert_eq!(
+        TCP_TX_BUF_SIZE & (TCP_TX_BUF_SIZE - 1),
+        0,
+        "TCP_TX_BUF_SIZE should be a power of two for efficient ring-buffer arithmetic"
+    );
 }
 
 #[cfg(feature = "pico2w")]

@@ -551,8 +551,8 @@ async fn tcp_server(
     config_ssid: heapless::String<32>,
     config_ip: heapless::String<16>,
 ) {
-    let mut rx_buf = [0u8; MAX_MSG_LEN];
-    let mut tx_buf = [0u8; MAX_MSG_LEN];
+    let mut rx_buf = [0u8; pico_socketeer::board::TCP_RX_BUF_SIZE];
+    let mut tx_buf = [0u8; pico_socketeer::board::TCP_TX_BUF_SIZE];
     let mut socket = TcpSocket::new(stack, &mut rx_buf, &mut tx_buf);
     socket.set_nodelay(pico_socketeer::board::TCP_NODELAY);
 
@@ -816,8 +816,8 @@ async fn ws_server(
     config_ssid: heapless::String<32>,
     config_ip: heapless::String<16>,
 ) {
-    let mut rx_buf = [0u8; MAX_MSG_LEN];
-    let mut tx_buf = [0u8; MAX_MSG_LEN];
+    let mut rx_buf = [0u8; pico_socketeer::board::TCP_RX_BUF_SIZE];
+    let mut tx_buf = [0u8; pico_socketeer::board::TCP_TX_BUF_SIZE];
     let mut socket = TcpSocket::new(stack, &mut rx_buf, &mut tx_buf);
     socket.set_nodelay(pico_socketeer::board::TCP_NODELAY);
 
@@ -959,8 +959,8 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
         let broker_addr = embassy_net::Ipv4Address::from(broker_ip.octets());
 
         // TCP connect to broker
-        let mut rx_buf = [0u8; 1024];
-        let mut tx_buf = [0u8; 1024];
+        let mut rx_buf = [0u8; pico_socketeer::board::TCP_RX_BUF_SIZE];
+        let mut tx_buf = [0u8; pico_socketeer::board::TCP_TX_BUF_SIZE];
         let mut socket = TcpSocket::new(stack, &mut rx_buf, &mut tx_buf);
         socket.set_nodelay(pico_socketeer::board::TCP_NODELAY);
         socket.set_timeout(Some(Duration::from_secs(90)));

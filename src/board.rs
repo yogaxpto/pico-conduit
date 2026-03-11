@@ -39,6 +39,18 @@ pub const CYW43_CLOCK_DIVIDER: FixedU32<U8> = FixedU32::from_bits(0x0180);
 #[cfg(feature = "pico1w")]
 pub const CYW43_CLOCK_DIVIDER: FixedU32<U8> = FixedU32::from_bits(0x0140);
 
+/// TCP socket receive buffer size in bytes.
+///
+/// 2× `MAX_MSG_LEN` provides headroom for TCP overhead and allows the CYW43 bridge
+/// to burst longer before per-segment ACK round-trips stall throughput.
+pub const TCP_RX_BUF_SIZE: usize = 2048;
+
+/// TCP socket transmit buffer size in bytes.
+///
+/// Outbound responses for SPI/I2C transfers with base64 payloads can approach 1 KB,
+/// so 2048 bytes avoids stalling the transmit side on back-to-back large responses.
+pub const TCP_TX_BUF_SIZE: usize = 2048;
+
 /// Whether to disable Nagle's algorithm (TCP_NODELAY) on all TCP sockets.
 ///
 /// Nagle's algorithm coalesces small outgoing segments, adding 10–40 ms per response.
