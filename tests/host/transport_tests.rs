@@ -241,6 +241,58 @@ fn mock_transport_malformed_json_returns_error_response() {
     });
 }
 
+/// Verify that 5 commands sent consecutively (without waiting for each response)
+/// produce 5 ordered responses — this is the server-side correctness guarantee for
+/// client-side pipelining as documented in PROTOCOL.md.
+#[test]
+fn pipelining_five_commands_return_five_ordered_responses() {
+    pollster_block(async {
+        let cmds: &[&[u8]] = &[
+            br#"{"version":1,"id":"p1","interface":"system","action":"get_version"}"#,
+            br#"{"version":1,"id":"p2","interface":"system","action":"get_version"}"#,
+            br#"{"version":1,"id":"p3","interface":"system","action":"get_version"}"#,
+            br#"{"version":1,"id":"p4","interface":"system","action":"get_version"}"#,
+            br#"{"version":1,"id":"p5","interface":"system","action":"get_version"}"#,
+        ];
+        let mut transport = MockTransport::from_frames(cmds);
+        run_handle_client(&mut transport).await;
+
+        assert_eq!(transport.written.len(), 5, "expected exactly 5 responses");
+        for (i, written) in transport.written.iter().enumerate() {
+            let resp = core::str::from_utf8(written).unwrap();
+            let expected_id = format!("\"id\":\"p{}\"", i + 1);
+            assert!(
+                resp.contains(&expected_id),
+                "response {i} has wrong id (ordering broken): {resp}"
+            );
+            assert!(resp.contains("\"ok\":true"), "response {i} not ok: {resp}");
+            assert!(resp.ends_with('\n'), "response {i} missing newline terminator");
+        }
+    });
+}
+
+/// Verify that a malformed command in a pipeline does not abort subsequent commands.
+#[test]
+fn pipelining_malformed_command_does_not_abort_pipeline() {
+    pollster_block(async {
+        let cmds: &[&[u8]] = &[
+            br#"{"version":1,"id":"q1","interface":"system","action":"get_version"}"#,
+            b"this is not json",
+            br#"{"version":1,"id":"q3","interface":"system","action":"get_version"}"#,
+        ];
+        let mut transport = MockTransport::from_frames(cmds);
+        run_handle_client(&mut transport).await;
+
+        assert_eq!(transport.written.len(), 3, "expected 3 responses (including error)");
+        let r0 = core::str::from_utf8(&transport.written[0]).unwrap();
+        let r1 = core::str::from_utf8(&transport.written[1]).unwrap();
+        let r2 = core::str::from_utf8(&transport.written[2]).unwrap();
+        assert!(r0.contains("\"id\":\"q1\"") && r0.contains("\"ok\":true"), "q1 failed: {r0}");
+        assert!(r1.contains("\"ok\":false") && r1.contains(ERROR_MALFORMED_JSON), "error resp: {r1}");
+        assert!(r2.contains("\"id\":\"q3\"") && r2.contains("\"ok\":true"), "q3 failed: {r2}");
+    });
+}
+
 #[test]
 fn mock_transport_reboot_flag_after_response() {
     pollster_block(async {

@@ -18,6 +18,34 @@ and connection management differ.
   closes before a new `accept()` is issued
 - **Idle timeout:** the server closes an idle connection after **30 seconds** of inactivity
 
+## Pipelining
+
+Clients **MAY** send multiple newline-delimited commands without waiting for each response.
+The server processes commands sequentially from the TCP stream and emits responses in the
+same order as commands were received.
+
+**Ordering guarantee:** responses are always emitted in the same order commands arrive,
+regardless of how they are buffered at the TCP layer.
+
+**Error tolerance:** a malformed or invalid command returns an error response for that
+command only. Subsequent commands in the pipeline continue to be processed normally —
+the connection is never terminated by a protocol-level error.
+
+Pipelining works best combined with `TCP_NODELAY` (enabled by default), which flushes
+each response immediately without Nagle coalescing.
+
+**Example — 5 commands sent in one burst:**
+```sh
+printf '%s\n' \
+  '{"version":1,"id":"1","interface":"gpio","action":"set_mode","pin":0,"mode":"output"}' \
+  '{"version":1,"id":"2","interface":"gpio","action":"write","pin":0,"value":1}' \
+  '{"version":1,"id":"3","interface":"gpio","action":"write","pin":0,"value":0}' \
+  '{"version":1,"id":"4","interface":"adc","action":"read","adc_channel":0}' \
+  '{"version":1,"id":"5","interface":"system","action":"get_version"}' \
+  | nc <pico-ip> 4242
+# All five responses arrive in order: id 1 through 5.
+```
+
 ## Request Format
 
 ```json

@@ -56,6 +56,21 @@ with socket.create_connection((HOST, 4242)) as s:
 > **Note:** `"version": 1` is required in every command. Omitting it causes the firmware
 > to reject the command with `"error": "missing_version"`.
 
+### Pipelining
+
+The server reads and responds to commands sequentially. Clients may send multiple
+newline-delimited commands without waiting for each response — responses are emitted in
+the same order as commands were received.
+
+```sh
+# Send 3 commands in a single burst; responses arrive in order
+printf '{"version":1,"id":"1","interface":"gpio","action":"set_mode","pin":0,"mode":"output"}\n{"version":1,"id":"2","interface":"gpio","action":"write","pin":0,"value":1}\n{"version":1,"id":"3","interface":"system","action":"get_version"}\n' \
+  | nc <pico-ip-address> 4242
+```
+
+A malformed command returns an error response for that command and processing continues
+for subsequent commands — the connection is never dropped on a protocol error.
+
 See [PROTOCOL.md](PROTOCOL.md) for the full command reference.
 
 ## Developer Setup
