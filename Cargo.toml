@@ -19,6 +19,10 @@ pico1w = ["embassy-rp/rp2040"]
 transport-tcp = []
 transport-websocket = []
 transport-mqtt = ["dep:rust-mqtt"]
+# Optional binary codec — uses postcard's compact binary format instead of JSON.
+# Evaluated over rmp-serde (requires alloc) and minicbor (no serde integration).
+# Mutually exclusive with future codec-cbor; currently the only binary codec option.
+codec-postcard = ["dep:postcard"]
 
 [[bin]]
 name = "pico-socketeer"
@@ -55,6 +59,13 @@ portable-atomic = { version = "1.5", features = ["critical-section"] }
 # Fixed-point arithmetic — provides FixedU32<U8> used for CYW43 SPI clock divider.
 # no_std compatible; compiles on both the embedded target and the host test runner.
 fixed = { version = "1", default-features = false }
+
+# Binary codec (optional, no_std, no-alloc).
+# Enabled by the `codec-postcard` feature. Evaluated alternatives:
+#   rmp-serde: MessagePack with serde — requires alloc, not viable for no_std.
+#   minicbor: CBOR format — no_std but uses its own derive macros, not serde-compatible.
+#   postcard: compact binary format, excellent no_std + no-alloc support, serde-compatible.
+postcard = { version = "1", default-features = false, optional = true }
 
 # ── Embedded-only deps ───────────────────────────────────────────────────────
 # Gated to `target_os = "none"` so they are NEVER compiled during host tests.

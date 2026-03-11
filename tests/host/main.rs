@@ -1,5 +1,6 @@
 mod base64_tests;
 mod batch_tests;
+mod codec_tests;
 #[cfg(any(feature = "pico2w", feature = "pico1w"))]
 mod board_tests;
 mod fixtures;

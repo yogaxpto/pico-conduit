@@ -86,6 +86,17 @@ pub enum AdcChannel {
     Temp,
 }
 
+impl Serialize for AdcChannel {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_u8(match self {
+            AdcChannel::Ch0 => 0,
+            AdcChannel::Ch1 => 1,
+            AdcChannel::Ch2 => 2,
+            AdcChannel::Temp => 3,
+        })
+    }
+}
+
 impl<'de> Deserialize<'de> for AdcChannel {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
         struct AdcChannelVisitor;
@@ -121,7 +132,7 @@ impl<'de> Deserialize<'de> for AdcChannel {
 /// Contains the same fields as [`Command`] but without the `commands` array,
 /// preventing recursive type definitions that would have unbounded stack size.
 /// `serde-json-core` deserializes each element of the `commands` array into this type.
-#[derive(Deserialize, Debug, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub struct CommandInner<'a> {
     pub version: Option<u8>,
     pub id: &'a str,
@@ -207,7 +218,7 @@ impl<'a> CommandInner<'a> {
 /// Do not split this struct: `serde-json-core` requires a single flat
 /// `Deserialize` impl for the wire format and has no reliable `flatten` support
 /// in `no_std` contexts.
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct Command<'a> {
     /// Protocol version — must be `Some(1)`. Missing → `missing_version`, other → `unsupported_version`.
     pub version: Option<u8>,

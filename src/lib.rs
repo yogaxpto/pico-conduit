@@ -44,8 +44,15 @@ compile_error!(
     "embedded builds require exactly one of: transport-tcp, transport-websocket, transport-mqtt"
 );
 
+// codec-postcard is the only binary codec; guard against a hypothetical second one.
+// When codec-cbor or another binary codec is added, add it to the lhs of this check.
+// Currently this guard always passes — it documents the mutual-exclusion pattern.
+// #[cfg(all(feature = "codec-postcard", feature = "codec-cbor"))]
+// compile_error!("codec features `codec-postcard` and `codec-cbor` are mutually exclusive");
+
 pub mod base64;
 pub mod board;
+pub mod codec;
 pub mod interfaces;
 pub mod led;
 pub mod mqtt;

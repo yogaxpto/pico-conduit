@@ -268,6 +268,67 @@ All error codes are lowercase snake_case `&str` values in the `"error"` field.
 | `ws_handshake_failed` | WebSocket HTTP upgrade handshake failed (missing key, bad headers) |
 | `batch_empty` | `batch/run` received an empty `commands` array |
 | `batch_too_large` | `batch/run` received more than 16 commands |
+| `already_subscribed` | `subscribe` for a channel/pin that already has an active subscription |
+| `not_subscribed` | `unsubscribe` for a channel/pin with no active subscription |
+| `subscription_limit` | Subscribe would exceed the maximum 8 concurrent subscriptions |
+
+---
+
+## Binary Codec (optional)
+
+By default pico-socketeer uses UTF-8 JSON for all commands and responses. An optional
+**postcard** binary codec can be selected at compile time via the `codec-postcard` feature flag.
+
+### Codec evaluation
+
+| Crate | Format | `no_std` + no-alloc | serde-compatible | Chosen |
+|-------|--------|---------------------|------------------|--------|
+| `rmp-serde` | MessagePack | ✗ (requires alloc) | ✓ | ✗ |
+| `minicbor` | CBOR | ✓ | ✗ (own derive macros) | ✗ |
+| `postcard` | postcard binary | ✓ | ✓ | **✓** |
+
+### Size comparison
+
+| Command / Response | JSON | Postcard | Reduction |
+|-------------------|------|----------|-----------|
+| GPIO read command | ~80 bytes | ~15 bytes | ~5× |
+| GPIO read response | ~45 bytes | ~8 bytes | ~5× |
+| Error response | ~55 bytes | ~12 bytes | ~4× |
+
+### Building with the binary codec
+
+```sh
+# Pico 2W — TCP transport + postcard codec
+cargo build --release --no-default-features --features embedded,pico2w,transport-tcp,codec-postcard
+
+# Host tests with postcard codec
+cargo test --test host --no-default-features --features codec-postcard --target aarch64-unknown-linux-musl
+```
+
+### Wire format (postcard)
+
+Commands from client to device use postcard's compact binary encoding in place of JSON.
+Responses use a flat tagged-enum binary format (see `src/codec.rs` — `BinaryResponse`).
+There is no newline delimiter; the transport framing (TCP length, WebSocket frame) carries
+the message boundary.
+
+**Encoding rules:**
+- All integer fields: postcard variable-length integer (varint)
+- Optional fields: `0x00` = absent, `0x01` followed by value = present
+- Strings (`id`, `interface`, `action`, etc.): varint length + UTF-8 bytes
+- Enum variants: 1-byte discriminant followed by variant payload
+- Byte payloads: varint length + raw bytes (no base64 encoding needed)
+
+### Runtime negotiation
+
+There is no runtime codec negotiation. The codec is selected at firmware compile time.
+Client software must use the matching codec for the connected device. Mixing a JSON
+client with a postcard firmware (or vice versa) will result in parse errors.
+
+### Mutual exclusion
+
+Codec features are mutually exclusive. Only one binary codec may be active at a time.
+A `compile_error!` is emitted if two codec features are enabled simultaneously.
 
 ---
 
