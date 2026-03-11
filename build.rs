@@ -8,8 +8,14 @@ fn main() {
     let is_pico1w = env::var("CARGO_FEATURE_PICO1W").is_ok();
 
     if is_embedded {
-        assert!(!(is_pico2w && is_pico1w), "features `pico2w` and `pico1w` are mutually exclusive");
-        assert!(is_pico2w || is_pico1w, "embedded builds require exactly one of `pico2w` or `pico1w`");
+        assert!(
+            !(is_pico2w && is_pico1w),
+            "features `pico2w` and `pico1w` are mutually exclusive"
+        );
+        assert!(
+            is_pico2w || is_pico1w,
+            "embedded builds require exactly one of `pico2w` or `pico1w`"
+        );
 
         let src = if is_pico2w {
             "memory-pico2w.x"

@@ -61,7 +61,8 @@ pub fn handle_write<'a, P: OutputPin>(pin: &mut P, cmd: &Command<'a>) -> Respons
     Response::ok(cmd.id, None)
 }
 
-/// Handle a GPIO set_mode command (mode/pull configuration).
+/// Handle a GPIO `set_mode` command (mode/pull configuration).
+#[must_use]
 pub fn handle_set_mode<'a>(cmd: &Command<'a>) -> Response<'a> {
     let _pin_num = match validate_pin(cmd) {
         Ok(p) => p,
@@ -82,7 +83,8 @@ pub fn handle_set_mode<'a>(cmd: &Command<'a>) -> Response<'a> {
     Response::ok(cmd.id, None)
 }
 
-/// Dispatch a GPIO command to the appropriate handler.
+/// Returns an error response for an unrecognised GPIO action.
+#[must_use]
 pub const fn handle_unknown_action<'a>(cmd: &Command<'a>) -> Response<'a> {
     Response::error(cmd.id, ERROR_UNKNOWN_ACTION)
 }

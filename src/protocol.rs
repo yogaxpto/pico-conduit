@@ -168,6 +168,7 @@ pub struct CommandInner<'a> {
 
 impl<'a> CommandInner<'a> {
     /// Convert to a full [`Command`] with `commands: None` for use with [`crate::router::dispatch`].
+    #[must_use]
     pub const fn to_command(&self) -> Command<'a> {
         Command {
             version: self.version,
@@ -270,9 +271,9 @@ pub struct Command<'a> {
     pub i2c: Option<u8>,
     /// I2C device address.
     pub addr: Option<u8>,
-    /// I2C write_read: base64-encoded bytes to write before reading.
+    /// I2C `write_read`: base64-encoded bytes to write before reading.
     pub write_bytes: Option<&'a str>,
-    /// I2C write_read: number of bytes to read back.
+    /// I2C `write_read`: number of bytes to read back.
     pub read_len: Option<usize>,
 
     // --- PWM ---
@@ -301,6 +302,11 @@ pub struct Command<'a> {
 
 impl<'a> Command<'a> {
     /// Validate the version field and return a protocol-level error if invalid.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ERROR_MISSING_VERSION`] if `version` is `None`, or
+    /// [`ERROR_UNSUPPORTED_VERSION`] if it is not `1`.
     pub const fn check_version(&self) -> Result<(), &'static str> {
         match self.version {
             None => Err(ERROR_MISSING_VERSION),
@@ -370,6 +376,7 @@ pub struct Response<'a> {
 
 impl<'a> Response<'a> {
     /// Construct a successful response with optional data payload.
+    #[must_use]
     pub const fn ok(id: &'a str, data: Option<ResponseData>) -> Self {
         Self {
             id,
@@ -380,6 +387,7 @@ impl<'a> Response<'a> {
     }
 
     /// Construct an error response.
+    #[must_use]
     pub const fn error(id: &'a str, error: &'static str) -> Self {
         Self {
             id,
@@ -398,6 +406,11 @@ impl<'a> Response<'a> {
 /// 3. Version field present and equals 1
 ///
 /// Returns the parsed [`Command`] borrowing from `buf`, or an error code string.
+///
+/// # Errors
+///
+/// Returns `Err` if the message exceeds [`MAX_MSG_LEN`], is not valid JSON,
+/// or fails version validation.
 pub fn parse_command(buf: &[u8]) -> Result<Command<'_>, &'static str> {
     if buf.len() > MAX_MSG_LEN {
         return Err(ERROR_MSG_TOO_LARGE);
@@ -412,6 +425,10 @@ pub fn parse_command(buf: &[u8]) -> Result<Command<'_>, &'static str> {
 ///
 /// Returns the number of bytes written (including the newline).
 /// Returns `Err` if the buffer is too small.
+///
+/// # Errors
+///
+/// Returns `Err` if serialization fails or the output buffer is too small.
 pub fn serialize_response<'a>(resp: &Response<'a>, buf: &mut [u8]) -> Result<usize, &'static str> {
     let n = serde_json_core::to_slice(resp, buf).map_err(|_| ERROR_MSG_TOO_LARGE)?;
     if n >= buf.len() {
@@ -432,6 +449,7 @@ pub struct FrameReader {
 }
 
 impl FrameReader {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             buf: [0u8; MAX_MSG_LEN],
@@ -450,6 +468,10 @@ impl FrameReader {
     /// - `Ok(Some(slice))` when a complete newline-terminated frame is ready
     /// - `Ok(None)` when more bytes are needed
     /// - `Err(ERROR_MSG_TOO_LARGE)` when the accumulated bytes exceed `MAX_MSG_LEN`
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ERROR_MSG_TOO_LARGE`] if the accumulated frame exceeds [`MAX_MSG_LEN`].
     pub fn push(&mut self, byte: u8) -> Result<Option<&[u8]>, &'static str> {
         if byte == b'\n' {
             if self.overflowed {
@@ -490,6 +512,7 @@ pub enum EdgeTrigger {
 
 impl EdgeTrigger {
     /// Parse from the wire string (`"edge_rising"`, `"edge_falling"`, `"edge_both"`).
+    #[must_use]
     pub fn parse(s: &str) -> Option<Self> {
         match s {
             "edge_rising" => Some(Self::Rising),
@@ -525,6 +548,7 @@ pub struct Subscription {
 impl Subscription {
     /// Return `true` if this subscription covers the same target as `other`.
     /// Used to detect duplicates (same channel/pin regardless of id or interval).
+    #[must_use]
     #[allow(clippy::match_same_arms)] // arms differ by variant, bodies identical by design
     pub fn same_target(&self, other: &SubscriptionTarget) -> bool {
         match (&self.target, other) {
@@ -593,7 +617,11 @@ impl<'a> serde::Serialize for BatchResponse<'a> {
 /// Serialize a [`BatchResponse`] to a byte buffer, appending a newline.
 ///
 /// Returns the number of bytes written (including the newline).
-/// Returns `Err(ERROR_MSG_TOO_LARGE)` if the buffer is too small.
+/// Returns [`ERROR_MSG_TOO_LARGE`] if the buffer is too small.
+///
+/// # Errors
+///
+/// Returns `Err` if serialization fails or the output buffer is too small.
 pub fn serialize_batch_response<'a>(
     resp: &BatchResponse<'a>,
     buf: &mut [u8],

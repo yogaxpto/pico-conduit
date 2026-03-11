@@ -15,13 +15,15 @@ pub const ADC_VREF: f32 = 3.3;
 pub const ADC_MAX: f32 = 4095.0;
 
 /// Convert a raw 12-bit ADC reading to voltage.
+#[must_use]
 pub fn raw_to_voltage(raw: u16) -> f32 {
     (f32::from(raw) / ADC_MAX) * ADC_VREF
 }
 
 /// Convert a raw ADC reading from the RP2350 temperature sensor to degrees Celsius.
 ///
-/// Formula from the RP2350 datasheet: T = 27 - (ADC_voltage - 0.706) / 0.001721
+/// Formula from the RP2350 datasheet: T = 27 - (`ADC_voltage` - 0.706) / 0.001721
+#[must_use]
 pub fn raw_to_celsius(raw: u16) -> f32 {
     let voltage = raw_to_voltage(raw);
     27.0 - (voltage - 0.706) / 0.001_721
@@ -31,6 +33,7 @@ pub fn raw_to_celsius(raw: u16) -> f32 {
 ///
 /// In the real firmware, the raw value is read from the RP2350 ADC peripheral before
 /// calling this function. For host tests, a mock raw value is provided directly.
+#[must_use]
 pub fn handle_read_with_raw<'a>(cmd: &Command<'a>, raw: u16) -> Response<'a> {
     let channel = match validate_read(cmd) {
         Ok(ch) => ch,
@@ -53,6 +56,10 @@ pub fn handle_read_with_raw<'a>(cmd: &Command<'a>, raw: u16) -> Response<'a> {
 ///
 /// Returns `Err` with an error response if the channel is invalid.
 /// Returns `Ok(channel)` if the command is well-formed.
+///
+/// # Errors
+///
+/// Returns `Err` if `adc_channel` is absent ([`ERROR_MISSING_FIELD`]).
 pub const fn validate_read<'a>(cmd: &Command<'a>) -> Result<AdcChannel, Response<'a>> {
     let Some(channel) = cmd.adc_channel else {
         return Err(Response::error(cmd.id, ERROR_MISSING_FIELD));
@@ -65,6 +72,7 @@ pub const fn validate_read<'a>(cmd: &Command<'a>) -> Result<AdcChannel, Response
 }
 
 /// Reject an out-of-range numeric channel (e.g. 3, 4, ...).
+#[must_use]
 pub const fn handle_invalid_channel<'a>(cmd: &Command<'a>) -> Response<'a> {
     Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE)
 }

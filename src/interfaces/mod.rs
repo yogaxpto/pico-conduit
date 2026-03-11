@@ -19,7 +19,7 @@ pub mod usb;
 /// | Pin | Reserved for |
 /// |-----|-------------|
 /// | 23  | BOOTSEL button (active low) |
-/// | 24  | CYW43 WL_ON |
+/// | 24  | CYW43 `WL_ON` |
 /// | 25  | CYW43 SPI CLK |
 /// | 26  | CYW43 SPI MOSI |
 /// | 27  | CYW43 SPI MISO |
@@ -28,6 +28,7 @@ pub mod usb;
 pub const RESERVED_PINS: &[u8] = &[23, 24, 25, 26, 27, 28, 29];
 
 /// Returns `true` if the given GPIO pin number is available for user commands.
+#[must_use]
 pub fn is_pin_available(pin: u8) -> bool {
     pin <= 29 && !RESERVED_PINS.contains(&pin)
 }
@@ -39,6 +40,11 @@ use crate::protocol::{
 
 /// Validate an `Option<u8>` peripheral index field, returning [`ERROR_MISSING_FIELD`] if
 /// `None` or [`ERROR_VALUE_OUT_OF_RANGE`] if the value exceeds `max`.
+///
+/// # Errors
+///
+/// Returns `Err` containing an error [`Response`] if `field` is `None` ([`ERROR_MISSING_FIELD`])
+/// or exceeds `max` ([`ERROR_VALUE_OUT_OF_RANGE`]).
 pub const fn validate_index<'a>(
     cmd: &Command<'a>,
     field: Option<u8>,
@@ -54,6 +60,11 @@ pub const fn validate_index<'a>(
 }
 
 /// Guard that returns [`ERROR_NOT_CONFIGURED`] when a peripheral has not been configured.
+///
+/// # Errors
+///
+/// Returns `Err` containing an error [`Response`] with [`ERROR_NOT_CONFIGURED`]
+/// if `configured` is `false`.
 pub const fn check_configured<'a>(cmd: &Command<'a>, configured: bool) -> Result<(), Response<'a>> {
     if configured {
         Ok(())
@@ -66,6 +77,11 @@ pub const fn check_configured<'a>(cmd: &Command<'a>, configured: bool) -> Result
 ///
 /// Returns [`ERROR_MISSING_FIELD`] if the field is absent or empty,
 /// [`ERROR_INVALID_ENCODING`] if the base64 is malformed.
+///
+/// # Errors
+///
+/// Returns `Err` if the field is absent ([`ERROR_MISSING_FIELD`]) or contains
+/// invalid base64 ([`ERROR_INVALID_ENCODING`]).
 pub fn decode_bytes<'a>(
     cmd: &Command<'a>,
     field: Option<&str>,
@@ -86,6 +102,11 @@ pub fn decode_bytes<'a>(
 
 /// Require an `Option<usize>` that is present and positive (> 0).
 /// Returns [`ERROR_MISSING_FIELD`] if `None`, [`ERROR_VALUE_OUT_OF_RANGE`] if zero.
+///
+/// # Errors
+///
+/// Returns `Err` if `field` is `None` ([`ERROR_MISSING_FIELD`]) or `Some(0)`
+/// ([`ERROR_VALUE_OUT_OF_RANGE`]).
 pub const fn require_positive<'a>(
     cmd: &Command<'a>,
     field: Option<usize>,
@@ -113,6 +134,7 @@ macro_rules! try_r {
 pub(crate) use try_r;
 
 /// Build a [`ResponseData::Bytes`] response, capping at `max_len` and the payload limit.
+#[must_use]
 pub fn bytes_response<'a>(id: &'a str, data: &[u8], max_len: usize) -> Response<'a> {
     let take = max_len.min(data.len()).min(MAX_PAYLOAD_LEN);
     let mut bytes = heapless::Vec::new();

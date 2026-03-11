@@ -36,7 +36,7 @@ pub struct DeviceState {
     pub config_mqtt_port: u16,
     /// Set by `system/reboot_to_bootloader`; checked by `net.rs` after the response is flushed.
     pub pending_reboot: bool,
-    /// Active push subscriptions. Cleared on disconnect (DeviceState is dropped).
+    /// Active push subscriptions. Cleared on disconnect (`DeviceState` is dropped).
     pub subscriptions: heapless::Vec<Subscription, MAX_SUBSCRIPTIONS>,
 }
 
@@ -85,6 +85,10 @@ static VALID_ROUTES: &[(&str, &[&str])] = &[
 ///
 /// In the full firmware, each branch calls into `crate::interfaces::*::handle(cmd, hw)`.
 /// In this routing layer we only validate the interface/action strings.
+///
+/// # Errors
+///
+/// Returns `Err` if the interface or action is absent or not in [`VALID_ROUTES`].
 pub fn validate_route<'a>(cmd: &Command<'a>) -> Result<(&'a str, &'a str), Response<'a>> {
     let Some(interface) = cmd.interface else {
         return Err(Response::error(cmd.id, ERROR_UNKNOWN_INTERFACE));

@@ -27,6 +27,7 @@ impl Credentials {
     /// Create credentials from string slices.
     /// Returns `None` if either string exceeds the capacity.
     /// MQTT fields default to empty host and port 1883.
+    #[must_use]
     pub fn new(ssid: &str, password: &str) -> Option<Self> {
         let ssid = heapless::String::try_from(ssid).ok()?;
         let password = heapless::String::try_from(password).ok()?;
@@ -40,6 +41,7 @@ impl Credentials {
 
     /// Create credentials with MQTT broker configuration.
     /// Returns `None` if any string exceeds its capacity.
+    #[must_use]
     pub fn with_mqtt(ssid: &str, password: &str, mqtt_host: &str, mqtt_port: u16) -> Option<Self> {
         let ssid = heapless::String::try_from(ssid).ok()?;
         let password = heapless::String::try_from(password).ok()?;
@@ -70,6 +72,7 @@ pub enum StorageError {
 /// (blank flash, erased sector, or corrupt data).
 ///
 /// **Stub:** always returns `None`. Full implementation uses `sequential-storage`.
+#[must_use]
 pub const fn load_credentials() -> Option<Credentials> {
     // Phase 6a stub — always returns None.
     // Full implementation reads from the CREDENTIALS flash region via sequential-storage.
@@ -82,6 +85,10 @@ pub const fn load_credentials() -> Option<Credentials> {
 /// Called after a successful provisioning test (Phase 6d).
 ///
 /// **Stub:** always returns `Ok(())`. Full implementation writes to flash via `sequential-storage`.
+///
+/// # Errors
+///
+/// Returns `Err` if writing to flash fails (stub always returns `Ok(())`).
 #[allow(unused_variables)]
 pub const fn save_credentials(_creds: &Credentials) -> Result<(), StorageError> {
     // Phase 6a stub — no-op.
@@ -94,6 +101,10 @@ pub const fn save_credentials(_creds: &Credentials) -> Result<(), StorageError> 
 /// Called during factory reset (Phase 6f) when BOOTSEL is held for 5 seconds at boot.
 ///
 /// **Stub:** always returns `Ok(())`.
+///
+/// # Errors
+///
+/// Returns `Err` if erasing the flash sector fails (stub always returns `Ok(())`).
 pub const fn erase_credentials() -> Result<(), StorageError> {
     // Phase 6f stub — no-op in stub mode.
     Ok(())

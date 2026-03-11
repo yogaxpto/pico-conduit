@@ -27,6 +27,10 @@ pub fn unmask(data: &mut [u8], mask_key: [u8; 4]) {
 ///
 /// - Payload ≤ 125 bytes: 2-byte header (FIN=1, opcode=0x1, length)
 /// - Payload 126–65535 bytes: 4-byte header (FIN=1, opcode=0x1, 126, 16-bit BE length)
+///
+/// # Errors
+///
+/// Returns `Err` if `payload_len` exceeds [`MAX_MSG_LEN`] or `out` is too small.
 #[allow(clippy::cast_possible_truncation)] // guarded by MAX_MSG_LEN (≤ 1024) and <= 125 checks
 pub fn encode_text_frame_header(payload_len: usize, out: &mut [u8]) -> Result<usize, &'static str> {
     if payload_len > MAX_MSG_LEN {
@@ -55,6 +59,10 @@ pub fn encode_text_frame_header(payload_len: usize, out: &mut [u8]) -> Result<us
 /// Encode a complete WebSocket text frame (header + payload) into `out`.
 ///
 /// Returns total bytes written.
+///
+/// # Errors
+///
+/// Returns `Err` if `payload.len()` exceeds [`MAX_MSG_LEN`] or `out` is too small.
 pub fn encode_text_frame(payload: &[u8], out: &mut [u8]) -> Result<usize, &'static str> {
     let header_len = encode_text_frame_header(payload.len(), out)?;
     let total = header_len + payload.len();
@@ -83,6 +91,7 @@ pub struct WsFrameHeader {
 ///
 /// Returns `None` if there are not enough bytes to parse the complete header.
 /// Does NOT validate the opcode or consume the payload.
+#[must_use]
 pub fn parse_frame_header(raw: &[u8]) -> Option<WsFrameHeader> {
     if raw.len() < 2 {
         return None;
@@ -130,6 +139,10 @@ pub fn parse_frame_header(raw: &[u8]) -> Option<WsFrameHeader> {
 /// Encode a WebSocket pong frame (server-to-client, unmasked).
 ///
 /// Control frame payloads must be ≤ 125 bytes (RFC 6455 section 5.5).
+///
+/// # Errors
+///
+/// Returns `Err` if `payload.len()` exceeds 125 or `out` is too small.
 #[allow(clippy::cast_possible_truncation)] // guarded by > 125 check above
 pub fn encode_pong_frame(payload: &[u8], out: &mut [u8]) -> Result<usize, &'static str> {
     if payload.len() > 125 {
@@ -168,7 +181,13 @@ pub fn compute_accept_key(client_key: &[u8], out: &mut [u8]) -> usize {
 // Minimal implementation used only for the WebSocket handshake key derivation.
 
 fn sha1(data: &[u8]) -> [u8; 20] {
-    let mut h: [u32; 5] = [0x6745_2301, 0xEFCD_AB89, 0x98BA_DCFE, 0x1032_5476, 0xC3D2_E1F0];
+    let mut h: [u32; 5] = [
+        0x6745_2301,
+        0xEFCD_AB89,
+        0x98BA_DCFE,
+        0x1032_5476,
+        0xC3D2_E1F0,
+    ];
     let bit_len = (data.len() as u64) * 8;
 
     // Process complete 64-byte blocks

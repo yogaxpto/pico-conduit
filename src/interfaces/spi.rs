@@ -26,11 +26,20 @@ impl Default for SpiConfig {
 }
 
 /// Validate the SPI peripheral index from a command (0 or 1).
+///
+/// # Errors
+///
+/// Returns `Err` if the `spi` field is absent or out of range (0–1).
 pub const fn validate_spi<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
     super::validate_index(cmd, cmd.spi, 1)
 }
 
 /// Handle a SPI `configure` command.
+///
+/// # Errors
+///
+/// Returns `Err` if the peripheral index is invalid, `freq_hz` is missing or zero,
+/// or `cpol`/`cpha` are not 0 or 1.
 pub fn handle_configure<'a>(cmd: &Command<'a>) -> Result<SpiConfig, Response<'a>> {
     let _spi_idx = validate_spi(cmd)?;
 
@@ -63,6 +72,7 @@ pub fn handle_configure<'a>(cmd: &Command<'a>) -> Result<SpiConfig, Response<'a>
 /// Handle a SPI `transfer` (full-duplex) command.
 ///
 /// `miso_data` is the data that the SPI slave would return (provided by caller / mock).
+#[must_use]
 pub fn handle_transfer<'a>(
     cmd: &'a Command<'a>,
     configured: bool,
@@ -77,6 +87,7 @@ pub fn handle_transfer<'a>(
 /// Handle a SPI `write` (MOSI only, MISO discarded) command.
 ///
 /// The caller (router) is responsible for validating the peripheral index.
+#[must_use]
 pub fn handle_write<'a>(cmd: &Command<'a>, configured: bool) -> Response<'a> {
     try_r!(super::check_configured(cmd, configured));
     try_r!(super::decode_bytes(cmd, cmd.bytes));

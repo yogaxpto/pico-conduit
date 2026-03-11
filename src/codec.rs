@@ -14,7 +14,7 @@
 //!
 //! Three `no_std` binary codecs were evaluated:
 //!
-//! - **`rmp-serde`** (MessagePack + serde): requires `alloc` for most operations;
+//! - **`rmp-serde`** (`MessagePack` + serde): requires `alloc` for most operations;
 //!   not viable for bare-metal `no_std` without a heap allocator.
 //! - **`minicbor`** (CBOR): `no_std` compatible, but uses its own derive macros
 //!   rather than standard `serde` traits — would require rewriting all type annotations.
@@ -35,10 +35,18 @@ use crate::protocol::{Command, Response};
 /// allowing the codec to be swapped without changing any transport or router logic.
 pub trait Codec {
     /// Parse a command from a raw byte frame.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the input is not valid JSON or does not match the command schema.
     #[allow(clippy::elidable_lifetime_names)]
     fn parse_command<'a>(bytes: &'a [u8]) -> Result<Command<'a>, &'static str>;
 
     /// Serialise a response into `buf`, returning the number of bytes written.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the response cannot be serialized into the output buffer.
     fn serialize_response(resp: &Response<'_>, buf: &mut [u8]) -> Result<usize, &'static str>;
 }
 

@@ -86,6 +86,10 @@ pub fn encode(input: &[u8], output: &mut [u8]) -> usize {
 ///
 /// Accepts input with or without `=` padding.
 ///
+/// # Errors
+///
+/// Returns `Err(())` if the input contains non-base64 characters or invalid padding.
+///
 /// # Panics
 ///
 /// Panics if `output` is too small. Required size: `input.len() / 4 * 3 + 3`.

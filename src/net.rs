@@ -6,13 +6,13 @@
 //! ## Architecture
 //!
 //! `CONTROL_MUTEX` owns the `cyw43::Control` handle after CYW43 init.  The mutex is held only
-//! for the duration of individual async HAL calls (gpio_set, join, scan, …) and released
+//! for the duration of individual async HAL calls (`gpio_set`, join, scan, …) and released
 //! immediately after each call — never held across a `Timer::after_*`.
 //!
 //! ### Startup sequence
 //!
 //! 1. `start()` — factory-reset check via GPIO23 (Flex), CYW43 init, store control in mutex.
-//! 2. Spawn `led_task` (drives LED via CONTROL_MUTEX).
+//! 2. Spawn `led_task` (drives LED via `CONTROL_MUTEX`).
 //! 3. STA mode if credentials found; AP provisioning mode otherwise.
 //!
 //! ### AP provisioning
@@ -81,10 +81,10 @@ const MAX_RECONNECT_SECS: u16 = 600; // 10 minutes
 
 // ── Flash credential storage constants ───────────────────────────────────────
 /// Magic sentinel v2 — includes MQTT broker fields.
-/// Old v1 magic (0xC0FF_EE42) is treated as missing credentials (re-provision).
+/// Old v1 magic (`0xC0FF_EE42`) is treated as missing credentials (re-provision).
 const CRED_MAGIC: u32 = 0xC0FF_EE43;
-/// Record layout v2: magic(4) + ssid_len(1) + pwd_len(1) + ssid(32) + pwd(64)
-///   + mqtt_host_len(1) + mqtt_host(64) + mqtt_port(2) = 169 bytes.
+/// Record layout v2: magic(4) + `ssid_len(1)` + `pwd_len(1)` + ssid(32) + pwd(64)
+///   + `mqtt_host_len(1)` + `mqtt_host(64)` + `mqtt_port(2)` = 169 bytes.
 const CRED_RECORD_SIZE: usize = 169;
 
 // ── TcpTransport ─────────────────────────────────────────────────────────────
@@ -135,7 +135,7 @@ impl Transport for TcpTransport<'_, '_> {
                     self.frame_reader.reset();
                     return Err(TransportError::Protocol(err_code));
                 }
-                Ok(None) => {}  // keep reading
+                Ok(None) => {} // keep reading
                 Ok(Some(frame)) => {
                     let len = frame.len();
                     buf[..len].copy_from_slice(frame);
@@ -159,7 +159,7 @@ impl Transport for TcpTransport<'_, '_> {
 
 /// Verify the firmware is running on the correct chip.
 ///
-/// Reads the SYSINFO CHIP_ID register and panics on mismatch to prevent silent
+/// Reads the SYSINFO `CHIP_ID` register and panics on mismatch to prevent silent
 /// malfunction if firmware built for one board is flashed to the other.
 fn validate_platform() {
     let chip_id = embassy_rp::pac::SYSINFO.chip_id().read();
@@ -219,7 +219,7 @@ embassy_rp::bind_interrupts!(struct Irqs {
 // ── Task type aliases ─────────────────────────────────────────────────────────
 type CywSpi =
     cyw43_pio::PioSpi<'static, embassy_rp::peripherals::PIO0, 0, embassy_rp::peripherals::DMA_CH0>;
-/// GPIO23 doubles as the CYW43 WL_ON line.  We first sample it as `Flex` (factory-reset check),
+/// GPIO23 doubles as the CYW43 `WL_ON` line.  We first sample it as `Flex` (factory-reset check),
 /// then reconfigure as output and pass to the cyw43 driver.
 type CywRunner = cyw43::Runner<'static, Flex<'static>, CywSpi>;
 type CredFlash = Flash<'static, embassy_rp::peripherals::FLASH, Blocking, FLASH_SIZE>;
@@ -362,7 +362,7 @@ fn erase_credentials_flash(flash: &mut CredFlash) {
 /// Check if GPIO23 is held low for 5 s after power-on.
 ///
 /// Per OBJECTIVE Phase 6f: GPIO23 is specified as the BOOTSEL pin (active low) on RP2350.
-/// Note that on Pico 2W hardware this pin is also the CYW43 WL_ON line; the check is
+/// Note that on Pico 2W hardware this pin is also the CYW43 `WL_ON` line; the check is
 /// implemented as specified regardless.
 async fn check_factory_reset(pin: &mut Flex<'_>) -> bool {
     pin.set_as_input();
@@ -1507,7 +1507,9 @@ async fn send_http(socket: &mut TcpSocket<'_>, status: &[u8], body: &[u8]) {
         while n > 0 {
             tp -= 1;
             #[allow(clippy::cast_possible_truncation)] // n % 10 is 0-9, fits u8
-            { tmp[tp] = b'0' + (n % 10) as u8; }
+            {
+                tmp[tp] = b'0' + (n % 10) as u8;
+            }
             n /= 10;
         }
     }

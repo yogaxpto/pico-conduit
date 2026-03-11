@@ -43,6 +43,10 @@ pub enum ParseError {
 /// Expected format: `METHOD /path HTTP/1.x\r\n` or `METHOD /path HTTP/1.x\n`.
 ///
 /// Returns a [`RequestLine`] borrowing from `line` (the first line only, without CRLF/LF).
+///
+/// # Errors
+///
+/// Returns `Err` if the request line is malformed or uses an unrecognised HTTP method.
 pub fn parse_request_line(line: &[u8]) -> Result<RequestLine<'_>, ParseError> {
     // Strip trailing \r\n or \n
     let line = line
@@ -85,6 +89,10 @@ pub struct ConnectForm<'a> {
 ///
 /// Percent-decoding is performed in-place using `decode_url_encoded`.
 ///
+/// # Errors
+///
+/// Returns `Err` if a required form field is missing or the form body is malformed.
+///
 /// # Note on lifetimes
 ///
 /// The returned [`ConnectForm`] borrows from the decoded buffer, not from `body`.
@@ -126,6 +134,10 @@ pub fn parse_connect_form<'a>(decoded: &'a str) -> Result<ConnectForm<'a>, Parse
 /// Also replaces `+` with space. Returns the number of decoded bytes written to `out`.
 ///
 /// `out` must be at least as large as `input` (decoded length is never longer than encoded).
+///
+/// # Errors
+///
+/// Returns `Err` if a `%xx` escape sequence contains non-hex characters.
 pub fn decode_url_encoded<'a>(
     input: &'a [u8],
     out: &'a mut [u8; 128],
@@ -183,6 +195,7 @@ pub fn decode_url_encoded<'a>(
 /// let ssid = make_ap_ssid([0xAA, 0xBB, 0xCC, 0xDD, 0xA3, 0xF2]);
 /// assert_eq!(ssid.as_str(), "pico-setup-A3F2");
 /// ```
+#[must_use]
 pub fn make_ap_ssid(mac: [u8; 6]) -> heapless::String<20> {
     use core::fmt::Write as _;
     let mut ssid: heapless::String<20> = heapless::String::new();

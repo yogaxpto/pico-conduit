@@ -54,7 +54,7 @@ pub const TCP_RX_BUF_SIZE: usize = 2048;
 /// so 2048 bytes avoids stalling the transmit side on back-to-back large responses.
 pub const TCP_TX_BUF_SIZE: usize = 2048;
 
-/// Whether to disable Nagle's algorithm (TCP_NODELAY) on all TCP sockets.
+/// Whether to disable Nagle's algorithm (`TCP_NODELAY`) on all TCP sockets.
 ///
 /// Nagle's algorithm coalesces small outgoing segments, adding 10–40 ms per response.
 /// Setting this to `true` eliminates that latency for short JSON messages.
@@ -63,16 +63,20 @@ pub const TCP_NODELAY: bool = true;
 /// WebSocket port for the JSON-over-WebSocket command interface.
 pub const WS_PORT: u16 = 4243;
 
-/// Expected SYSINFO CHIP_ID PART value for the active board.
+/// Expected SYSINFO `CHIP_ID` PART value for the active board.
 #[cfg(feature = "pico2w")]
 pub const EXPECTED_CHIP_PART: u16 = 0x4;
 /// Expected SYSINFO CHIP_ID PART value for the active board.
 #[cfg(feature = "pico1w")]
 pub const EXPECTED_CHIP_PART: u16 = 0x2;
 
-/// Validate that a SYSINFO CHIP_ID PART value matches the expected board.
+/// Validate that a SYSINFO `CHIP_ID` PART value matches the expected board.
 ///
 /// Returns `Ok(())` on match, `Err` with diagnostic on mismatch.
+///
+/// # Errors
+///
+/// Returns `Err(&'static str)` if `actual_part` does not match the expected chip ID.
 #[cfg(any(feature = "pico2w", feature = "pico1w"))]
 pub const fn validate_chip_part(actual_part: u16) -> Result<(), &'static str> {
     if actual_part == EXPECTED_CHIP_PART {

@@ -35,11 +35,20 @@ pub enum UartParity {
 }
 
 /// Validate the UART peripheral index from a command.
+///
+/// # Errors
+///
+/// Returns `Err` if the `uart` field is absent or out of range (0–1).
 pub const fn validate_uart<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
     super::validate_index(cmd, cmd.uart, 1)
 }
 
 /// Handle a UART `configure` command.
+///
+/// # Errors
+///
+/// Returns `Err` if the peripheral index is invalid, `baud` is missing or zero,
+/// `data_bits` is not 7 or 8, `parity` is unrecognised, or `stop_bits` is not 1 or 2.
 pub fn handle_configure<'a>(cmd: &Command<'a>) -> Result<UartConfig, Response<'a>> {
     let _uart_idx = validate_uart(cmd)?;
 
@@ -81,6 +90,7 @@ pub fn handle_configure<'a>(cmd: &Command<'a>) -> Result<UartConfig, Response<'a
 ///
 /// `configured` indicates whether the UART has been configured via `configure` first.
 /// The caller (router) is responsible for validating the peripheral index.
+#[must_use]
 pub fn handle_write<'a>(cmd: &Command<'a>, configured: bool) -> Response<'a> {
     try_r!(super::check_configured(cmd, configured));
     try_r!(super::decode_bytes(cmd, cmd.bytes));
@@ -91,6 +101,7 @@ pub fn handle_write<'a>(cmd: &Command<'a>, configured: bool) -> Response<'a> {
 /// Handle a UART `read` command.
 ///
 /// `rx_data` is the data available in the UART RX buffer (provided by the caller).
+#[must_use]
 pub fn handle_read_with_data<'a>(
     cmd: &'a Command<'a>,
     configured: bool,

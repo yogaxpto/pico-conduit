@@ -144,6 +144,7 @@ pub enum LedState {
 
 impl LedState {
     /// Returns the [`LedPattern`] for this state.
+    #[must_use]
     pub const fn pattern(self) -> LedPattern {
         match self {
             Self::Booting => LedPattern::Repeat(BOOTING_STEPS),
