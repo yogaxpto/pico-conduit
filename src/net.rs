@@ -552,6 +552,7 @@ async fn tcp_server(
     let mut rx_buf = [0u8; MAX_MSG_LEN];
     let mut tx_buf = [0u8; MAX_MSG_LEN];
     let mut socket = TcpSocket::new(stack, &mut rx_buf, &mut tx_buf);
+    socket.set_nodelay(pico_socketeer::board::TCP_NODELAY);
 
     let mut reconnect_attempt: u8 = 0;
     let mut total_offline_secs: u16 = 0;
@@ -816,6 +817,7 @@ async fn ws_server(
     let mut rx_buf = [0u8; MAX_MSG_LEN];
     let mut tx_buf = [0u8; MAX_MSG_LEN];
     let mut socket = TcpSocket::new(stack, &mut rx_buf, &mut tx_buf);
+    socket.set_nodelay(pico_socketeer::board::TCP_NODELAY);
 
     let mut reconnect_attempt: u8 = 0;
     let mut total_offline_secs: u16 = 0;
@@ -958,6 +960,7 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
         let mut rx_buf = [0u8; 1024];
         let mut tx_buf = [0u8; 1024];
         let mut socket = TcpSocket::new(stack, &mut rx_buf, &mut tx_buf);
+        socket.set_nodelay(pico_socketeer::board::TCP_NODELAY);
         socket.set_timeout(Some(Duration::from_secs(90)));
 
         if let Err(e) = socket.connect((broker_addr, creds.mqtt_port)).await {

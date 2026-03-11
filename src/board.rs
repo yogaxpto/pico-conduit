@@ -20,6 +20,12 @@ pub const CRED_FLASH_OFFSET: u32 = (FLASH_SIZE - CRED_REGION_SIZE) as u32;
 /// TCP port for the JSON-over-TCP command interface.
 pub const TCP_PORT: u16 = 4242;
 
+/// Whether to disable Nagle's algorithm (TCP_NODELAY) on all TCP sockets.
+///
+/// Nagle's algorithm coalesces small outgoing segments, adding 10–40 ms per response.
+/// Setting this to `true` eliminates that latency for short JSON messages.
+pub const TCP_NODELAY: bool = true;
+
 /// WebSocket port for the JSON-over-WebSocket command interface.
 pub const WS_PORT: u16 = 4243;
 

@@ -1,3 +1,10 @@
+use pico_socketeer::board::TCP_NODELAY;
+
+#[test]
+fn tcp_nodelay_is_enabled() {
+    assert!(TCP_NODELAY, "TCP_NODELAY must be true to eliminate Nagle delay");
+}
+
 #[cfg(feature = "pico2w")]
 mod pico2w {
     use pico_socketeer::board::{
