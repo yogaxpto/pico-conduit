@@ -11,7 +11,7 @@
 //! development convenience — never use in production builds.
 
 /// Wi-Fi credentials stored in flash.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Credentials {
     /// Wi-Fi SSID (up to 32 bytes).
     pub ssid: heapless::String<32>,
@@ -54,7 +54,7 @@ impl Credentials {
 }
 
 /// Error type for storage operations.
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum StorageError {
     /// Flash write failed.
     WriteError,
@@ -70,7 +70,7 @@ pub enum StorageError {
 /// (blank flash, erased sector, or corrupt data).
 ///
 /// **Stub:** always returns `None`. Full implementation uses `sequential-storage`.
-pub fn load_credentials() -> Option<Credentials> {
+pub const fn load_credentials() -> Option<Credentials> {
     // Phase 6a stub — always returns None.
     // Full implementation reads from the CREDENTIALS flash region via sequential-storage.
     // Compile-time credential override is handled in net::start via option_env!.
@@ -83,7 +83,7 @@ pub fn load_credentials() -> Option<Credentials> {
 ///
 /// **Stub:** always returns `Ok(())`. Full implementation writes to flash via `sequential-storage`.
 #[allow(unused_variables)]
-pub fn save_credentials(_creds: &Credentials) -> Result<(), StorageError> {
+pub const fn save_credentials(_creds: &Credentials) -> Result<(), StorageError> {
     // Phase 6a stub — no-op.
     // Full implementation writes to the CREDENTIALS flash region via sequential-storage.
     Ok(())
@@ -94,7 +94,7 @@ pub fn save_credentials(_creds: &Credentials) -> Result<(), StorageError> {
 /// Called during factory reset (Phase 6f) when BOOTSEL is held for 5 seconds at boot.
 ///
 /// **Stub:** always returns `Ok(())`.
-pub fn erase_credentials() -> Result<(), StorageError> {
+pub const fn erase_credentials() -> Result<(), StorageError> {
     // Phase 6f stub — no-op in stub mode.
     Ok(())
 }

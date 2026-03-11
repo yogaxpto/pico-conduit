@@ -7,7 +7,7 @@ use super::try_r;
 use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response};
 
 /// I2C configuration parameters.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct I2cConfig {
     pub freq_hz: u32,
     pub configured: bool,
@@ -23,12 +23,13 @@ impl Default for I2cConfig {
 }
 
 /// Validate the I2C peripheral index from a command (0 or 1).
-pub fn validate_i2c<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
+pub const fn validate_i2c<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
     super::validate_index(cmd, cmd.i2c, 1)
 }
 
 /// Validate the I2C device address from a command.
-fn validate_addr<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
+#[allow(clippy::option_if_let_else)]
+const fn validate_addr<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
     match cmd.addr {
         Some(a) => Ok(a),
         None => Err(Response::error(cmd.id, ERROR_MISSING_FIELD)),
@@ -40,7 +41,7 @@ pub fn handle_configure<'a>(cmd: &Command<'a>) -> Result<I2cConfig, Response<'a>
     let _i2c_idx = validate_i2c(cmd)?;
 
     let freq_hz = match cmd.freq_hz {
-        Some(100_000) | Some(400_000) => cmd.freq_hz.unwrap(),
+        Some(100_000 | 400_000) => cmd.freq_hz.unwrap(),
         Some(_) => return Err(Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE)),
         None => return Err(Response::error(cmd.id, ERROR_MISSING_FIELD)),
     };

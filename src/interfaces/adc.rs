@@ -16,7 +16,7 @@ pub const ADC_MAX: f32 = 4095.0;
 
 /// Convert a raw 12-bit ADC reading to voltage.
 pub fn raw_to_voltage(raw: u16) -> f32 {
-    (raw as f32 / ADC_MAX) * ADC_VREF
+    (f32::from(raw) / ADC_MAX) * ADC_VREF
 }
 
 /// Convert a raw ADC reading from the RP2350 temperature sensor to degrees Celsius.
@@ -24,7 +24,7 @@ pub fn raw_to_voltage(raw: u16) -> f32 {
 /// Formula from the RP2350 datasheet: T = 27 - (ADC_voltage - 0.706) / 0.001721
 pub fn raw_to_celsius(raw: u16) -> f32 {
     let voltage = raw_to_voltage(raw);
-    27.0 - (voltage - 0.706) / 0.001721
+    27.0 - (voltage - 0.706) / 0.001_721
 }
 
 /// Handle an ADC read command with a pre-read raw value.
@@ -53,10 +53,9 @@ pub fn handle_read_with_raw<'a>(cmd: &Command<'a>, raw: u16) -> Response<'a> {
 ///
 /// Returns `Err` with an error response if the channel is invalid.
 /// Returns `Ok(channel)` if the command is well-formed.
-pub fn validate_read<'a>(cmd: &Command<'a>) -> Result<AdcChannel, Response<'a>> {
-    let channel = match cmd.adc_channel {
-        Some(ch) => ch,
-        None => return Err(Response::error(cmd.id, ERROR_MISSING_FIELD)),
+pub const fn validate_read<'a>(cmd: &Command<'a>) -> Result<AdcChannel, Response<'a>> {
+    let Some(channel) = cmd.adc_channel else {
+        return Err(Response::error(cmd.id, ERROR_MISSING_FIELD));
     };
     // ADC channel 3 (GPIO29) is reserved — embedded in the reserved-pins list.
     // Channels 0-2 and Temp are valid.
@@ -66,6 +65,6 @@ pub fn validate_read<'a>(cmd: &Command<'a>) -> Result<AdcChannel, Response<'a>> 
 }
 
 /// Reject an out-of-range numeric channel (e.g. 3, 4, ...).
-pub fn handle_invalid_channel<'a>(cmd: &Command<'a>) -> Response<'a> {
+pub const fn handle_invalid_channel<'a>(cmd: &Command<'a>) -> Response<'a> {
     Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE)
 }

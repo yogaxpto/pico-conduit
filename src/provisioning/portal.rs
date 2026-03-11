@@ -10,21 +10,21 @@
 //! which is `no_std`-compatible and testable on the host.
 
 /// An HTTP method parsed from a request line.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Method {
     Get,
     Post,
 }
 
 /// A parsed HTTP request line.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RequestLine<'a> {
     pub method: Method,
     pub path: &'a str,
 }
 
 /// Error from HTTP or URL parsing.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParseError {
     /// The request line is malformed (missing method, path, or HTTP version).
     MalformedRequestLine,
@@ -67,7 +67,7 @@ pub fn parse_request_line(line: &[u8]) -> Result<RequestLine<'_>, ParseError> {
 }
 
 /// Parsed form data from a `POST /connect` request body.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConnectForm<'a> {
     pub ssid: &'a str,
     pub password: &'a str,
@@ -190,7 +190,7 @@ pub fn make_ap_ssid(mac: [u8; 6]) -> heapless::String<20> {
     ssid
 }
 
-fn hex_nibble(b: u8) -> Result<u8, ParseError> {
+const fn hex_nibble(b: u8) -> Result<u8, ParseError> {
     match b {
         b'0'..=b'9' => Ok(b - b'0'),
         b'a'..=b'f' => Ok(b - b'a' + 10),

@@ -3,7 +3,9 @@
 //! These values are compile-time constants that compile on both the embedded
 //! target and the host test runner.
 
+#[cfg(any(feature = "pico2w", feature = "pico1w"))]
 use fixed::FixedU32;
+#[cfg(any(feature = "pico2w", feature = "pico1w"))]
 use fixed::types::extra::U8;
 
 /// Total flash size for the active board variant (see `memory-pico*.x`).
@@ -18,6 +20,7 @@ pub const CRED_REGION_SIZE: usize = 8 * 1024;
 
 /// Credential storage flash offset (last 8 KB of flash).
 #[cfg(any(feature = "pico2w", feature = "pico1w"))]
+#[allow(clippy::cast_possible_truncation)] // FLASH_SIZE ≤ 4 MB, well within u32 range
 pub const CRED_FLASH_OFFSET: u32 = (FLASH_SIZE - CRED_REGION_SIZE) as u32;
 
 /// TCP port for the JSON-over-TCP command interface.
@@ -71,7 +74,7 @@ pub const EXPECTED_CHIP_PART: u16 = 0x2;
 ///
 /// Returns `Ok(())` on match, `Err` with diagnostic on mismatch.
 #[cfg(any(feature = "pico2w", feature = "pico1w"))]
-pub fn validate_chip_part(actual_part: u16) -> Result<(), &'static str> {
+pub const fn validate_chip_part(actual_part: u16) -> Result<(), &'static str> {
     if actual_part == EXPECTED_CHIP_PART {
         Ok(())
     } else {

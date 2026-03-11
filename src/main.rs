@@ -6,6 +6,7 @@
 #![no_std]
 #![no_main]
 #![deny(clippy::all)]
+#![allow(clippy::future_not_send)]
 
 // Embedded-only: panic handler and RTT logger.
 // Not included in test builds — the test harness provides its own runtime.

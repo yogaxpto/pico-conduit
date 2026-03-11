@@ -6,7 +6,7 @@ use super::try_r;
 use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response};
 
 /// SPI configuration parameters.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SpiConfig {
     pub freq_hz: u32,
     pub cpol: u8,
@@ -26,7 +26,7 @@ impl Default for SpiConfig {
 }
 
 /// Validate the SPI peripheral index from a command (0 or 1).
-pub fn validate_spi<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
+pub const fn validate_spi<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
     super::validate_index(cmd, cmd.spi, 1)
 }
 

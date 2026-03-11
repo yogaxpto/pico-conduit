@@ -35,7 +35,7 @@ pub fn client_id(mac: [u8; 6]) -> heapless::String<16> {
 /// Compute the reconnect backoff delay in seconds for a given attempt number.
 ///
 /// Sequence: 5 → 10 → 20 → 40 → 60 (capped at 60s).
-pub fn backoff_secs(attempt: u8) -> u16 {
+pub const fn backoff_secs(attempt: u8) -> u16 {
     match attempt {
         0 => 5,
         1 => 10,

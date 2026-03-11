@@ -49,7 +49,7 @@ pub fn encode(input: &[u8], output: &mut [u8]) -> usize {
     let remainder = chunks.remainder();
 
     for chunk in chunks {
-        let triple = (chunk[0] as u32) << 16 | (chunk[1] as u32) << 8 | chunk[2] as u32;
+        let triple = u32::from(chunk[0]) << 16 | u32::from(chunk[1]) << 8 | u32::from(chunk[2]);
         output[o] = ENCODE_TABLE[((triple >> 18) & 0x3F) as usize];
         output[o + 1] = ENCODE_TABLE[((triple >> 12) & 0x3F) as usize];
         output[o + 2] = ENCODE_TABLE[((triple >> 6) & 0x3F) as usize];
@@ -59,7 +59,7 @@ pub fn encode(input: &[u8], output: &mut [u8]) -> usize {
 
     match remainder.len() {
         1 => {
-            let b0 = remainder[0] as u32;
+            let b0 = u32::from(remainder[0]);
             output[o] = ENCODE_TABLE[((b0 >> 2) & 0x3F) as usize];
             output[o + 1] = ENCODE_TABLE[((b0 << 4) & 0x3F) as usize];
             output[o + 2] = b'=';
@@ -67,8 +67,8 @@ pub fn encode(input: &[u8], output: &mut [u8]) -> usize {
             o += 4;
         }
         2 => {
-            let b0 = remainder[0] as u32;
-            let b1 = remainder[1] as u32;
+            let b0 = u32::from(remainder[0]);
+            let b1 = u32::from(remainder[1]);
             output[o] = ENCODE_TABLE[((b0 >> 2) & 0x3F) as usize];
             output[o + 1] = ENCODE_TABLE[(((b0 << 4) | (b1 >> 4)) & 0x3F) as usize];
             output[o + 2] = ENCODE_TABLE[((b1 << 2) & 0x3F) as usize];
@@ -89,7 +89,7 @@ pub fn encode(input: &[u8], output: &mut [u8]) -> usize {
 /// # Panics
 ///
 /// Panics if `output` is too small. Required size: `input.len() / 4 * 3 + 3`.
-#[allow(clippy::result_unit_err)]
+#[allow(clippy::result_unit_err, clippy::many_single_char_names)]
 pub fn decode(input: &[u8], output: &mut [u8]) -> Result<usize, ()> {
     // Strip trailing padding.
     let len = input.len();

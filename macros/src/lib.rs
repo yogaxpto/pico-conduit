@@ -28,7 +28,7 @@ pub fn require_env(attr: TokenStream, item: TokenStream) -> TokenStream {
         #original_body
     });
 
-    func.block = Box::new(new_body);
+    *func.block = new_body;
 
     TokenStream::from(quote! { #func })
 }

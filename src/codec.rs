@@ -35,6 +35,7 @@ use crate::protocol::{Command, Response};
 /// allowing the codec to be swapped without changing any transport or router logic.
 pub trait Codec {
     /// Parse a command from a raw byte frame.
+    #[allow(clippy::elidable_lifetime_names)]
     fn parse_command<'a>(bytes: &'a [u8]) -> Result<Command<'a>, &'static str>;
 
     /// Serialise a response into `buf`, returning the number of bytes written.
@@ -50,6 +51,7 @@ pub trait Codec {
 pub struct JsonCodec;
 
 impl Codec for JsonCodec {
+    #[allow(clippy::elidable_lifetime_names)]
     fn parse_command<'a>(bytes: &'a [u8]) -> Result<Command<'a>, &'static str> {
         crate::protocol::parse_command(bytes)
     }

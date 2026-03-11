@@ -6,7 +6,7 @@ use super::try_r;
 use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Response};
 
 /// UART configuration parameters, stored per-peripheral.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UartConfig {
     pub baud: u32,
     pub data_bits: u8,
@@ -18,7 +18,7 @@ pub struct UartConfig {
 impl Default for UartConfig {
     fn default() -> Self {
         Self {
-            baud: 115200,
+            baud: 115_200,
             data_bits: 8,
             parity: UartParity::None,
             stop_bits: 1,
@@ -27,7 +27,7 @@ impl Default for UartConfig {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UartParity {
     None,
     Odd,
@@ -35,7 +35,7 @@ pub enum UartParity {
 }
 
 /// Validate the UART peripheral index from a command.
-pub fn validate_uart<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
+pub const fn validate_uart<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
     super::validate_index(cmd, cmd.uart, 1)
 }
 

@@ -39,14 +39,13 @@ use crate::protocol::{
 
 /// Validate an `Option<u8>` peripheral index field, returning [`ERROR_MISSING_FIELD`] if
 /// `None` or [`ERROR_VALUE_OUT_OF_RANGE`] if the value exceeds `max`.
-pub fn validate_index<'a>(
+pub const fn validate_index<'a>(
     cmd: &Command<'a>,
     field: Option<u8>,
     max: u8,
 ) -> Result<u8, Response<'a>> {
-    let idx = match field {
-        Some(v) => v,
-        None => return Err(Response::error(cmd.id, ERROR_MISSING_FIELD)),
+    let Some(idx) = field else {
+        return Err(Response::error(cmd.id, ERROR_MISSING_FIELD));
     };
     if idx > max {
         return Err(Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE));
@@ -55,7 +54,7 @@ pub fn validate_index<'a>(
 }
 
 /// Guard that returns [`ERROR_NOT_CONFIGURED`] when a peripheral has not been configured.
-pub fn check_configured<'a>(cmd: &Command<'a>, configured: bool) -> Result<(), Response<'a>> {
+pub const fn check_configured<'a>(cmd: &Command<'a>, configured: bool) -> Result<(), Response<'a>> {
     if configured {
         Ok(())
     } else {
@@ -77,7 +76,7 @@ pub fn decode_bytes<'a>(
     };
     let mut buf = [0u8; MAX_PAYLOAD_LEN];
     let n = crate::base64::decode(encoded.as_bytes(), &mut buf)
-        .map_err(|_| Response::error(cmd.id, ERROR_INVALID_ENCODING))?;
+        .map_err(|()| Response::error(cmd.id, ERROR_INVALID_ENCODING))?;
     let mut v = heapless::Vec::new();
     // n <= MAX_PAYLOAD_LEN by construction, so extend_from_slice cannot fail.
     v.extend_from_slice(&buf[..n])
@@ -87,7 +86,7 @@ pub fn decode_bytes<'a>(
 
 /// Require an `Option<usize>` that is present and positive (> 0).
 /// Returns [`ERROR_MISSING_FIELD`] if `None`, [`ERROR_VALUE_OUT_OF_RANGE`] if zero.
-pub fn require_positive<'a>(
+pub const fn require_positive<'a>(
     cmd: &Command<'a>,
     field: Option<usize>,
 ) -> Result<usize, Response<'a>> {

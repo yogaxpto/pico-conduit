@@ -27,6 +27,7 @@ pub fn unmask(data: &mut [u8], mask_key: [u8; 4]) {
 ///
 /// - Payload ≤ 125 bytes: 2-byte header (FIN=1, opcode=0x1, length)
 /// - Payload 126–65535 bytes: 4-byte header (FIN=1, opcode=0x1, 126, 16-bit BE length)
+#[allow(clippy::cast_possible_truncation)] // guarded by MAX_MSG_LEN (≤ 1024) and <= 125 checks
 pub fn encode_text_frame_header(payload_len: usize, out: &mut [u8]) -> Result<usize, &'static str> {
     if payload_len > MAX_MSG_LEN {
         return Err(ERROR_MSG_TOO_LARGE);
@@ -129,6 +130,7 @@ pub fn parse_frame_header(raw: &[u8]) -> Option<WsFrameHeader> {
 /// Encode a WebSocket pong frame (server-to-client, unmasked).
 ///
 /// Control frame payloads must be ≤ 125 bytes (RFC 6455 section 5.5).
+#[allow(clippy::cast_possible_truncation)] // guarded by > 125 check above
 pub fn encode_pong_frame(payload: &[u8], out: &mut [u8]) -> Result<usize, &'static str> {
     if payload.len() > 125 {
         return Err(ERROR_MSG_TOO_LARGE);
@@ -166,7 +168,7 @@ pub fn compute_accept_key(client_key: &[u8], out: &mut [u8]) -> usize {
 // Minimal implementation used only for the WebSocket handshake key derivation.
 
 fn sha1(data: &[u8]) -> [u8; 20] {
-    let mut h: [u32; 5] = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476, 0xC3D2E1F0];
+    let mut h: [u32; 5] = [0x6745_2301, 0xEFCD_AB89, 0x98BA_DCFE, 0x1032_5476, 0xC3D2_E1F0];
     let bit_len = (data.len() as u64) * 8;
 
     // Process complete 64-byte blocks
@@ -196,7 +198,7 @@ fn sha1(data: &[u8]) -> [u8; 20] {
     out
 }
 
-#[allow(clippy::needless_range_loop)]
+#[allow(clippy::needless_range_loop, clippy::many_single_char_names)]
 fn sha1_block(block: &[u8], h: &mut [u32; 5]) {
     let mut w = [0u32; 80];
     for i in 0..16 {
@@ -215,10 +217,10 @@ fn sha1_block(block: &[u8], h: &mut [u32; 5]) {
 
     for i in 0..80 {
         let (f, k) = match i {
-            0..=19 => ((b & c) | ((!b) & d), 0x5A827999u32),
-            20..=39 => (b ^ c ^ d, 0x6ED9EBA1u32),
-            40..=59 => ((b & c) | (b & d) | (c & d), 0x8F1BBCDCu32),
-            _ => (b ^ c ^ d, 0xCA62C1D6u32),
+            0..=19 => ((b & c) | ((!b) & d), 0x5A82_7999_u32),
+            20..=39 => (b ^ c ^ d, 0x6ED9_EBA1_u32),
+            40..=59 => ((b & c) | (b & d) | (c & d), 0x8F1B_BCDC_u32),
+            _ => (b ^ c ^ d, 0xCA62_C1D6_u32),
         };
         let temp = a
             .rotate_left(5)

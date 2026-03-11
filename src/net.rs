@@ -1,4 +1,5 @@
 //! Wi-Fi connectivity, TCP socket server, LED task, provisioning, and flash storage.
+#![allow(clippy::future_not_send)]
 //!
 //! Embedded-only module (not compiled during `cargo test --lib`).
 //!
@@ -26,7 +27,8 @@ use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
 use embassy_net::udp::{PacketMetadata, UdpSocket};
 use embassy_net::{
-    Config, IpListenEndpoint, Ipv4Address, Ipv4Cidr, Stack, StackResources, StaticConfigV4,
+    Config, DhcpConfig, IpListenEndpoint, Ipv4Address, Ipv4Cidr, Stack, StackResources,
+    StaticConfigV4,
 };
 use embassy_rp::flash::{Blocking, Flash};
 use embassy_rp::gpio::{Flex, Level, Output, Pull};
@@ -96,7 +98,7 @@ struct TcpTransport<'a, 'b> {
 
 #[cfg(feature = "transport-tcp")]
 impl<'a, 'b> TcpTransport<'a, 'b> {
-    fn new(socket: &'a mut TcpSocket<'b>) -> Self {
+    const fn new(socket: &'a mut TcpSocket<'b>) -> Self {
         Self {
             socket,
             frame_reader: FrameReader::new(),
@@ -133,7 +135,7 @@ impl Transport for TcpTransport<'_, '_> {
                     self.frame_reader.reset();
                     return Err(TransportError::Protocol(err_code));
                 }
-                Ok(None) => continue,
+                Ok(None) => {}  // keep reading
                 Ok(Some(frame)) => {
                     let len = frame.len();
                     buf[..len].copy_from_slice(frame);
@@ -191,6 +193,7 @@ static FLASH_CELL: StaticCell<CredFlash> = StaticCell::new();
 /// 2. `CriticalSectionRawMutex` disables IRQs, so no concurrent access is possible.
 struct ControlWrapper(cyw43::Control<'static>);
 // SAFETY: see above — single-core cooperative scheduling + CS mutex.
+#[allow(clippy::non_send_fields_in_send_ty)]
 unsafe impl Send for ControlWrapper {}
 unsafe impl Sync for ControlWrapper {}
 impl core::ops::Deref for ControlWrapper {
@@ -330,14 +333,19 @@ fn save_credentials_flash(flash: &mut CredFlash, creds: &Credentials) -> bool {
     buf[0..4].copy_from_slice(&CRED_MAGIC.to_le_bytes());
     let ssid_b = creds.ssid.as_bytes();
     let pwd_b = creds.password.as_bytes();
-    buf[4] = ssid_b.len() as u8;
-    buf[5] = pwd_b.len() as u8;
+    #[allow(clippy::cast_possible_truncation)] // lengths bounded by heapless::String capacity
+    {
+        buf[4] = ssid_b.len() as u8;
+        buf[5] = pwd_b.len() as u8;
+    }
     buf[6..6 + ssid_b.len()].copy_from_slice(ssid_b);
     buf[38..38 + pwd_b.len()].copy_from_slice(pwd_b);
 
     // v2 MQTT fields
     let mqtt_host_b = creds.mqtt_host.as_bytes();
-    buf[102] = mqtt_host_b.len() as u8;
+    #[allow(clippy::cast_possible_truncation)] // bounded by heapless::String capacity
+    let mqtt_host_len = mqtt_host_b.len() as u8;
+    buf[102] = mqtt_host_len;
     buf[103..103 + mqtt_host_b.len()].copy_from_slice(mqtt_host_b);
     buf[167..169].copy_from_slice(&creds.mqtt_port.to_le_bytes());
 
@@ -380,7 +388,7 @@ async fn check_factory_reset(pin: &mut Flex<'_>) -> bool {
 
 /// Exponential backoff: 5s → 10s → 20s → 40s → 60s (capped at 60s).
 #[cfg(any(feature = "transport-tcp", feature = "transport-websocket"))]
-fn backoff_duration(attempt: u8) -> Duration {
+const fn backoff_duration(attempt: u8) -> Duration {
     match attempt {
         0 => Duration::from_secs(5),
         1 => Duration::from_secs(10),
@@ -477,7 +485,7 @@ pub async fn start(spawner: Spawner, p: embassy_rp::Peripherals) {
 // ── STA mode ─────────────────────────────────────────────────────────────────
 
 async fn sta_mode(spawner: Spawner, net_device: cyw43::NetDriver<'static>, creds: Credentials) {
-    let config = Config::dhcpv4(Default::default());
+    let config = Config::dhcpv4(DhcpConfig::default());
     let seed = 0x_dead_beef_cafe_babe_u64;
     let resources = STACK_RESOURCES_STA.init(StackResources::new());
     let (stack, net_runner) = embassy_net::new(net_device, config, resources, seed);
@@ -605,8 +613,9 @@ async fn tcp_server(
                 socket.abort();
 
                 let backoff = backoff_duration(reconnect_attempt);
-                let secs = backoff.as_secs();
-                total_offline_secs = total_offline_secs.saturating_add(secs as u16);
+                #[allow(clippy::cast_possible_truncation)] // backoff_duration ≤ 60s, fits u16
+                let secs = backoff.as_secs() as u16;
+                total_offline_secs = total_offline_secs.saturating_add(secs);
 
                 if total_offline_secs >= MAX_RECONNECT_SECS {
                     defmt::error!("Connection failed 10 min — SOS");
@@ -644,8 +653,7 @@ impl WsTransport<'_, '_> {
         while offset < buf.len() {
             match with_timeout(TCP_READ_TIMEOUT, self.socket.read(&mut buf[offset..])).await {
                 Err(_) => return Err(TransportError::Timeout),
-                Ok(Err(_)) => return Err(TransportError::Disconnected),
-                Ok(Ok(0)) => return Err(TransportError::Disconnected),
+                Ok(Err(_) | Ok(0)) => return Err(TransportError::Disconnected),
                 Ok(Ok(n)) => offset += n,
             }
         }
@@ -727,9 +735,8 @@ impl Transport for WsTransport<'_, '_> {
                     if let Ok(n) = encode_pong_frame(&buf[..payload_len], &mut pong_buf) {
                         let _ = self.socket.write_all(&pong_buf[..n]).await;
                     }
-                    continue;
                 }
-                _ => continue, // PONG and unknown opcodes: ignore
+                _ => {} // PONG and unknown opcodes: ignore
             }
         }
     }
@@ -876,8 +883,9 @@ async fn ws_server(
                 socket.abort();
 
                 let backoff = backoff_duration(reconnect_attempt);
-                let secs = backoff.as_secs();
-                total_offline_secs = total_offline_secs.saturating_add(secs as u16);
+                #[allow(clippy::cast_possible_truncation)] // backoff_duration ≤ 60s, fits u16
+                let secs = backoff.as_secs() as u16;
+                total_offline_secs = total_offline_secs.saturating_add(secs);
 
                 if total_offline_secs >= MAX_RECONNECT_SECS {
                     defmt::error!("WS connection failed 10 min — SOS");
@@ -899,6 +907,7 @@ async fn ws_server(
 // ── MQTT client (STA mode) ───────────────────────────────────────────────────
 
 #[cfg(feature = "transport-mqtt")]
+#[allow(clippy::too_many_lines)] // MQTT client is inherently a long state-machine loop
 async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapless::String<16>) {
     use pico_socketeer::mqtt;
     use rust_mqtt::Bytes;
@@ -947,14 +956,11 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
         LED_SIGNAL.signal(LedState::MqttConnecting);
 
         // Parse broker IP address
-        let broker_ip = match creds.mqtt_host.as_str().parse::<core::net::Ipv4Addr>() {
-            Ok(ip) => ip,
-            Err(_) => {
-                defmt::error!("Invalid MQTT broker IP: {}", creds.mqtt_host.as_str());
-                LED_SIGNAL.signal(LedState::Error);
-                Timer::after_secs(60).await;
-                continue;
-            }
+        let Ok(broker_ip) = creds.mqtt_host.as_str().parse::<core::net::Ipv4Addr>() else {
+            defmt::error!("Invalid MQTT broker IP: {}", creds.mqtt_host.as_str());
+            LED_SIGNAL.signal(LedState::Error);
+            Timer::after_secs(60).await;
+            continue;
         };
         let broker_addr = embassy_net::Ipv4Address::from(broker_ip.octets());
 
@@ -974,7 +980,7 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
                 secs
             );
             LED_SIGNAL.signal(LedState::Reconnecting);
-            Timer::after_secs(secs as u64).await;
+            Timer::after_secs(u64::from(secs)).await;
             reconnect_attempt = reconnect_attempt.saturating_add(1);
             continue;
         }
@@ -1008,7 +1014,7 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
                 defmt::warn!("MQTT CONNECT failed: {:?}", e);
                 let secs = mqtt::backoff_secs(reconnect_attempt);
                 LED_SIGNAL.signal(LedState::Reconnecting);
-                Timer::after_secs(secs as u64).await;
+                Timer::after_secs(u64::from(secs)).await;
                 reconnect_attempt = reconnect_attempt.saturating_add(1);
                 continue;
             }
@@ -1032,7 +1038,7 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
             defmt::warn!("MQTT SUBSCRIBE failed: {:?}", e);
             let secs = mqtt::backoff_secs(reconnect_attempt);
             LED_SIGNAL.signal(LedState::Reconnecting);
-            Timer::after_secs(secs as u64).await;
+            Timer::after_secs(u64::from(secs)).await;
             reconnect_attempt = reconnect_attempt.saturating_add(1);
             continue;
         }
@@ -1186,6 +1192,7 @@ async fn handle_client<T: Transport>(
 // ── AP mode and captive portal ────────────────────────────────────────────────
 
 /// AP provisioning mode — never returns (runs until credentials are saved and watchdog reboots).
+#[allow(clippy::default_trait_access)] // heapless::Vec capacity can't be inferred without Default
 async fn ap_mode(
     spawner: Spawner,
     net_device: cyw43::NetDriver<'static>,
@@ -1252,7 +1259,7 @@ async fn dhcp_server(stack: &Stack<'static>) {
 
     if socket
         .bind(embassy_net::IpEndpoint::new(
-            embassy_net::IpAddress::Ipv4(Ipv4Address::new(0, 0, 0, 0)),
+            embassy_net::IpAddress::Ipv4(Ipv4Address::UNSPECIFIED),
             67,
         ))
         .is_err()
@@ -1284,7 +1291,7 @@ async fn dhcp_server(stack: &Stack<'static>) {
             .send_to(
                 &reply,
                 embassy_net::IpEndpoint::new(
-                    embassy_net::IpAddress::Ipv4(Ipv4Address::new(255, 255, 255, 255)),
+                    embassy_net::IpAddress::Ipv4(Ipv4Address::BROADCAST),
                     68,
                 ),
             )
@@ -1499,7 +1506,8 @@ async fn send_http(socket: &mut TcpSocket<'_>, status: &[u8], body: &[u8]) {
     } else {
         while n > 0 {
             tp -= 1;
-            tmp[tp] = b'0' + (n % 10) as u8;
+            #[allow(clippy::cast_possible_truncation)] // n % 10 is 0-9, fits u8
+            { tmp[tp] = b'0' + (n % 10) as u8; }
             n /= 10;
         }
     }
@@ -1545,12 +1553,9 @@ async fn handle_http_request(
 
     // Parse request line
     let line_end = find_subsequence(headers, b"\r\n").unwrap_or(n);
-    let req = match parse_request_line(&headers[..line_end.min(n)]) {
-        Ok(r) => r,
-        Err(_) => {
-            send_http(socket, b"400 Bad Request", b"Bad Request").await;
-            return;
-        }
+    let Ok(req) = parse_request_line(&headers[..line_end.min(n)]) else {
+        send_http(socket, b"400 Bad Request", b"Bad Request").await;
+        return;
     };
 
     // Captive portal: redirect any request not targeting the AP gateway
@@ -1562,7 +1567,7 @@ async fn handle_http_request(
     }
 
     match (req.method, req.path) {
-        (Method::Get, "/") | (Method::Get, "/index.html") => {
+        (Method::Get, "/" | "/index.html") => {
             serve_scan_form(socket, ap_ssid).await;
         }
         (Method::Get, "/status") => {
@@ -1738,7 +1743,7 @@ async fn handle_provision(
             )
             .await
             .ok()
-            .and_then(|r| r.ok())
+            .and_then(Result::ok)
             .is_some()
         } else {
             false

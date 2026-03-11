@@ -14,6 +14,11 @@
 // Response<'a> is large (~540 bytes) because it embeds Base64Bytes (up to 512-byte payload).
 // On no_std we cannot Box it, so allow the large-err lint crate-wide.
 #![allow(clippy::result_large_err)]
+// CLAUDE.md requires explicit 'a lifetimes on functions returning Command<'a>/Response<'a>.
+// This conflicts with clippy::pedantic's elidable_lifetime_names lint.
+#![allow(clippy::elidable_lifetime_names)]
+// Embassy tasks run on a single-core cooperative executor and are never sent across threads.
+#![allow(clippy::future_not_send)]
 
 #[cfg(all(feature = "pico2w", feature = "pico1w"))]
 compile_error!("features `pico2w` and `pico1w` are mutually exclusive");

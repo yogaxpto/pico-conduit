@@ -78,7 +78,7 @@ pub const ERROR_NOT_SUBSCRIBED: &str = "not_subscribed";
 ///
 /// Wire encoding: 0 = Ch0, 1 = Ch1, 2 = Ch2, 3 = Temp (onboard temperature sensor).
 /// `serde-json-core` does not support `deserialize_any`, so the channel is always numeric.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum AdcChannel {
     Ch0,
     Ch1,
@@ -89,10 +89,10 @@ pub enum AdcChannel {
 impl Serialize for AdcChannel {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         s.serialize_u8(match self {
-            AdcChannel::Ch0 => 0,
-            AdcChannel::Ch1 => 1,
-            AdcChannel::Ch2 => 2,
-            AdcChannel::Temp => 3,
+            Self::Ch0 => 0,
+            Self::Ch1 => 1,
+            Self::Ch2 => 2,
+            Self::Temp => 3,
         })
     }
 }
@@ -118,7 +118,7 @@ impl<'de> Deserialize<'de> for AdcChannel {
                 if v < 0 {
                     Err(E::custom("adc channel cannot be negative"))
                 } else {
-                    self.visit_u64(v as u64)
+                    self.visit_u64(v.cast_unsigned())
                 }
             }
         }
@@ -132,7 +132,7 @@ impl<'de> Deserialize<'de> for AdcChannel {
 /// Contains the same fields as [`Command`] but without the `commands` array,
 /// preventing recursive type definitions that would have unbounded stack size.
 /// `serde-json-core` deserializes each element of the `commands` array into this type.
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Clone)]
 pub struct CommandInner<'a> {
     pub version: Option<u8>,
     pub id: &'a str,
@@ -168,7 +168,7 @@ pub struct CommandInner<'a> {
 
 impl<'a> CommandInner<'a> {
     /// Convert to a full [`Command`] with `commands: None` for use with [`crate::router::dispatch`].
-    pub fn to_command(&self) -> Command<'a> {
+    pub const fn to_command(&self) -> Command<'a> {
         Command {
             version: self.version,
             id: self.id,
@@ -218,7 +218,7 @@ impl<'a> CommandInner<'a> {
 /// Do not split this struct: `serde-json-core` requires a single flat
 /// `Deserialize` impl for the wire format and has no reliable `flatten` support
 /// in `no_std` contexts.
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub struct Command<'a> {
     /// Protocol version — must be `Some(1)`. Missing → `missing_version`, other → `unsupported_version`.
     pub version: Option<u8>,
@@ -301,7 +301,7 @@ pub struct Command<'a> {
 
 impl<'a> Command<'a> {
     /// Validate the version field and return a protocol-level error if invalid.
-    pub fn check_version(&self) -> Result<(), &'static str> {
+    pub const fn check_version(&self) -> Result<(), &'static str> {
         match self.version {
             None => Err(ERROR_MISSING_VERSION),
             Some(1) => Ok(()),
@@ -313,7 +313,7 @@ impl<'a> Command<'a> {
 /// A byte buffer that serializes as a base64 string.
 ///
 /// Holds raw bytes internally; encoding happens during [`Serialize`].
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Base64Bytes(pub heapless::Vec<u8, MAX_PAYLOAD_LEN>);
 
 impl Serialize for Base64Bytes {
@@ -370,7 +370,7 @@ pub struct Response<'a> {
 
 impl<'a> Response<'a> {
     /// Construct a successful response with optional data payload.
-    pub fn ok(id: &'a str, data: Option<ResponseData>) -> Self {
+    pub const fn ok(id: &'a str, data: Option<ResponseData>) -> Self {
         Self {
             id,
             ok: true,
@@ -380,7 +380,7 @@ impl<'a> Response<'a> {
     }
 
     /// Construct an error response.
-    pub fn error(id: &'a str, error: &'static str) -> Self {
+    pub const fn error(id: &'a str, error: &'static str) -> Self {
         Self {
             id,
             ok: false,
@@ -441,7 +441,7 @@ impl FrameReader {
     }
 
     /// Reset the reader state (call after processing a frame or on error).
-    pub fn reset(&mut self) {
+    pub const fn reset(&mut self) {
         self.pos = 0;
         self.overflowed = false;
     }
@@ -481,7 +481,7 @@ impl Default for FrameReader {
 // ── Subscription types ────────────────────────────────────────────────────────
 
 /// GPIO edge trigger selector for `gpio/subscribe`.
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum EdgeTrigger {
     Rising,
     Falling,
@@ -501,7 +501,7 @@ impl EdgeTrigger {
 }
 
 /// What a subscription is watching.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum SubscriptionTarget {
     /// ADC channel polled at `interval_ms` rate.
     Adc {
@@ -525,6 +525,7 @@ pub struct Subscription {
 impl Subscription {
     /// Return `true` if this subscription covers the same target as `other`.
     /// Used to detect duplicates (same channel/pin regardless of id or interval).
+    #[allow(clippy::match_same_arms)] // arms differ by variant, bodies identical by design
     pub fn same_target(&self, other: &SubscriptionTarget) -> bool {
         match (&self.target, other) {
             (

@@ -100,7 +100,7 @@ const REBOOTING_STEPS: &[(bool, u16)] = &[
 // ── LedPattern ────────────────────────────────────────────────────────────────
 
 /// Describes how the LED driver should play a state's pattern.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum LedPattern {
     /// Set the LED to a fixed state and hold until the next signal.
     Solid(bool),
@@ -116,7 +116,7 @@ pub enum LedPattern {
 ///
 /// The 9 variants correspond to the LED Status Reference table in OBJECTIVE.md Phase 5b
 /// and Phase 9a (Rebooting).
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum LedState {
     /// Firmware starting up — 3-flash burst (100ms ON / 100ms OFF × 3, 1s OFF, repeat)
     Booting,
@@ -144,19 +144,18 @@ pub enum LedState {
 
 impl LedState {
     /// Returns the [`LedPattern`] for this state.
-    pub fn pattern(self) -> LedPattern {
+    pub const fn pattern(self) -> LedPattern {
         match self {
-            LedState::Booting => LedPattern::Repeat(BOOTING_STEPS),
-            LedState::Provisioning => LedPattern::Repeat(PROVISIONING_STEPS),
-            LedState::Scanning => LedPattern::Repeat(SCANNING_STEPS),
-            LedState::Connecting => LedPattern::Repeat(CONNECTING_STEPS),
-            LedState::Connected => LedPattern::Solid(true),
-            LedState::Reconnecting => LedPattern::Repeat(RECONNECTING_STEPS),
-            LedState::Error => LedPattern::Repeat(SOS_TIMING),
-            LedState::Saving => LedPattern::OneShot(SAVING_STEPS),
-            LedState::Rebooting => LedPattern::OneShot(REBOOTING_STEPS),
-            LedState::MqttConnecting => LedPattern::Repeat(MQTT_CONNECTING_STEPS),
-            LedState::MqttConnected => LedPattern::Solid(true),
+            Self::Booting => LedPattern::Repeat(BOOTING_STEPS),
+            Self::Provisioning => LedPattern::Repeat(PROVISIONING_STEPS),
+            Self::Scanning => LedPattern::Repeat(SCANNING_STEPS),
+            Self::Connecting => LedPattern::Repeat(CONNECTING_STEPS),
+            Self::Connected | Self::MqttConnected => LedPattern::Solid(true),
+            Self::Reconnecting => LedPattern::Repeat(RECONNECTING_STEPS),
+            Self::Error => LedPattern::Repeat(SOS_TIMING),
+            Self::Saving => LedPattern::OneShot(SAVING_STEPS),
+            Self::Rebooting => LedPattern::OneShot(REBOOTING_STEPS),
+            Self::MqttConnecting => LedPattern::Repeat(MQTT_CONNECTING_STEPS),
         }
     }
 }

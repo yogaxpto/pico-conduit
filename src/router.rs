@@ -86,13 +86,11 @@ static VALID_ROUTES: &[(&str, &[&str])] = &[
 /// In the full firmware, each branch calls into `crate::interfaces::*::handle(cmd, hw)`.
 /// In this routing layer we only validate the interface/action strings.
 pub fn validate_route<'a>(cmd: &Command<'a>) -> Result<(&'a str, &'a str), Response<'a>> {
-    let interface = match cmd.interface {
-        Some(i) => i,
-        None => return Err(Response::error(cmd.id, ERROR_UNKNOWN_INTERFACE)),
+    let Some(interface) = cmd.interface else {
+        return Err(Response::error(cmd.id, ERROR_UNKNOWN_INTERFACE));
     };
-    let action = match cmd.action {
-        Some(a) => a,
-        None => return Err(Response::error(cmd.id, ERROR_UNKNOWN_ACTION)),
+    let Some(action) = cmd.action else {
+        return Err(Response::error(cmd.id, ERROR_UNKNOWN_ACTION));
     };
 
     let actions = VALID_ROUTES
@@ -113,6 +111,7 @@ pub fn validate_route<'a>(cmd: &Command<'a>) -> Result<(&'a str, &'a str), Respo
 /// `route` is the `(interface, action)` tuple returned by [`validate_route`].
 /// Actions that require hardware peripherals (GPIO pins, ADC reads, UART/SPI/I2C RX data)
 /// return [`ERROR_NOT_CONFIGURED`] — the firmware extends this with actual peripheral access.
+#[allow(clippy::too_many_lines, clippy::match_same_arms)]
 pub fn dispatch<'a>(
     cmd: &Command<'a>,
     route: (&str, &str),
@@ -145,19 +144,17 @@ pub fn dispatch<'a>(
     match route {
         // ---- GPIO ----
         ("gpio", "set_mode") => crate::interfaces::gpio::handle_set_mode(cmd),
-        ("gpio", "read") | ("gpio", "write") => {
+        ("gpio", "read" | "write") => {
             // Needs actual InputPin/OutputPin hardware — stub returns not_configured.
             Response::error(cmd.id, ERROR_NOT_CONFIGURED)
         }
         ("gpio", "subscribe") => {
-            let pin = match cmd.pin {
-                Some(p) => p,
-                None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+            let Some(pin) = cmd.pin else {
+                return Response::error(cmd.id, ERROR_MISSING_FIELD);
             };
             if let Some(trigger_str) = cmd.trigger {
-                let trigger = match EdgeTrigger::parse(trigger_str) {
-                    Some(t) => t,
-                    None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+                let Some(trigger) = EdgeTrigger::parse(trigger_str) else {
+                    return Response::error(cmd.id, ERROR_MISSING_FIELD);
                 };
                 handle_subscribe(cmd.id, SubscriptionTarget::GpioEdge { pin, trigger }, state)
             } else {
@@ -170,9 +167,8 @@ pub fn dispatch<'a>(
             }
         }
         ("gpio", "unsubscribe") => {
-            let pin = match cmd.pin {
-                Some(p) => p,
-                None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+            let Some(pin) = cmd.pin else {
+                return Response::error(cmd.id, ERROR_MISSING_FIELD);
             };
             handle_unsubscribe_gpio(cmd.id, pin, state)
         }
@@ -183,9 +179,8 @@ pub fn dispatch<'a>(
             Err(r) => r,
         },
         ("adc", "subscribe") => {
-            let channel = match cmd.adc_channel {
-                Some(ch) => ch,
-                None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+            let Some(channel) = cmd.adc_channel else {
+                return Response::error(cmd.id, ERROR_MISSING_FIELD);
             };
             let interval_ms = cmd.interval_ms.unwrap_or(100);
             handle_subscribe(
@@ -198,9 +193,8 @@ pub fn dispatch<'a>(
             )
         }
         ("adc", "unsubscribe") => {
-            let channel = match cmd.adc_channel {
-                Some(ch) => ch,
-                None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+            let Some(channel) = cmd.adc_channel else {
+                return Response::error(cmd.id, ERROR_MISSING_FIELD);
             };
             handle_unsubscribe_adc(cmd.id, channel, state)
         }
@@ -218,7 +212,7 @@ pub fn dispatch<'a>(
         // ---- I2C ----
         ("i2c", "configure") => configure!(i2c::handle_configure, cmd.i2c, state.i2c),
         ("i2c", "write") => peripheral_write!(i2c::validate_i2c, state.i2c, i2c::handle_write),
-        ("i2c", "read") | ("i2c", "write_read") => Response::error(cmd.id, ERROR_NOT_CONFIGURED),
+        ("i2c", "read" | "write_read") => Response::error(cmd.id, ERROR_NOT_CONFIGURED),
 
         // ---- PWM ----
         ("pwm", "set_duty") => pwm::handle_set_duty(cmd),
@@ -304,6 +298,7 @@ pub fn dispatch_batch<'a>(cmd: &Command<'a>, state: &mut DeviceState) -> BatchRe
     }
 
     let mut responses: heapless::Vec<Response<'a>, MAX_BATCH_SIZE> = heapless::Vec::new();
+    #[allow(clippy::explicit_iter_loop)] // heapless::Vec doesn't impl IntoIterator for &
     for inner in inner_cmds.iter() {
         let full_cmd = inner.to_command();
         let resp = match validate_route(&full_cmd) {
@@ -368,9 +363,9 @@ fn handle_unsubscribe_adc<'a>(
 fn handle_unsubscribe_gpio<'a>(id: &'a str, pin: u8, state: &mut DeviceState) -> Response<'a> {
     let before = state.subscriptions.len();
     state.subscriptions.retain(|s| match &s.target {
-        SubscriptionTarget::GpioLevel { pin: p, .. } => *p != pin,
-        SubscriptionTarget::GpioEdge { pin: p, .. } => *p != pin,
-        _ => true,
+        SubscriptionTarget::GpioLevel { pin: p, .. }
+        | SubscriptionTarget::GpioEdge { pin: p, .. } => *p != pin,
+        SubscriptionTarget::Adc { .. } => true,
     });
     if state.subscriptions.len() == before {
         return Response::error(id, ERROR_NOT_SUBSCRIBED);

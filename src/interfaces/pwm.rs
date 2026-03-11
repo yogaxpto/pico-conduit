@@ -9,7 +9,7 @@ use crate::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, Re
 pub const MAX_PWM_CHANNEL: u8 = 15;
 
 /// Validate the PWM channel number from a command.
-pub fn validate_channel<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
+pub const fn validate_channel<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
     super::validate_index(cmd, cmd.channel, MAX_PWM_CHANNEL)
 }
 
@@ -21,9 +21,8 @@ pub fn handle_set_duty<'a>(cmd: &Command<'a>) -> Response<'a> {
         Ok(c) => c,
         Err(r) => return r,
     };
-    let _duty = match cmd.duty_u16 {
-        Some(d) => d,
-        None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+    let Some(_duty) = cmd.duty_u16 else {
+        return Response::error(cmd.id, ERROR_MISSING_FIELD);
     };
     // In the real firmware: configure the PWM slice duty cycle via embassy-rp Pwm peripheral
     Response::ok(cmd.id, None)
@@ -37,9 +36,8 @@ pub fn handle_set_freq<'a>(cmd: &Command<'a>) -> Response<'a> {
         Ok(c) => c,
         Err(r) => return r,
     };
-    let freq = match cmd.freq_hz {
-        Some(f) => f,
-        None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
+    let Some(freq) = cmd.freq_hz else {
+        return Response::error(cmd.id, ERROR_MISSING_FIELD);
     };
     if freq == 0 {
         return Response::error(cmd.id, ERROR_VALUE_OUT_OF_RANGE);

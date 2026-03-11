@@ -409,7 +409,6 @@ fn dispatch_pwm_set_duty_missing_channel() {
 }
 
 #[test]
-#[test]
 #[cfg(not(feature = "transport-mqtt"))]
 fn config_get_excludes_mqtt_fields_without_feature() {
     // Without transport-mqtt feature, config/get response should NOT contain mqtt_host

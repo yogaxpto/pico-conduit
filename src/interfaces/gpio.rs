@@ -12,9 +12,8 @@ use embedded_hal::digital::{InputPin, OutputPin};
 
 /// Validate the GPIO pin number from a command, rejecting reserved pins.
 fn validate_pin<'a>(cmd: &Command<'a>) -> Result<u8, Response<'a>> {
-    let pin_num = match cmd.pin {
-        Some(p) => p,
-        None => return Err(Response::error(cmd.id, ERROR_MISSING_FIELD)),
+    let Some(pin_num) = cmd.pin else {
+        return Err(Response::error(cmd.id, ERROR_MISSING_FIELD));
     };
     if !is_pin_available(pin_num) {
         return Err(Response::error(cmd.id, ERROR_INVALID_PIN));
@@ -28,14 +27,13 @@ pub fn handle_read<'a, P: InputPin>(pin: &mut P, cmd: &Command<'a>) -> Response<
         Ok(p) => p,
         Err(r) => return r,
     };
-    let high = match pin.is_high() {
-        Ok(v) => v,
-        Err(_) => return Response::error(cmd.id, crate::protocol::ERROR_PERIPHERAL_ERROR),
+    let Ok(high) = pin.is_high() else {
+        return Response::error(cmd.id, crate::protocol::ERROR_PERIPHERAL_ERROR);
     };
     Response::ok(
         cmd.id,
         Some(ResponseData::GpioRead {
-            value: if high { 1 } else { 0 },
+            value: u8::from(high),
         }),
     )
 }
@@ -85,6 +83,6 @@ pub fn handle_set_mode<'a>(cmd: &Command<'a>) -> Response<'a> {
 }
 
 /// Dispatch a GPIO command to the appropriate handler.
-pub fn handle_unknown_action<'a>(cmd: &Command<'a>) -> Response<'a> {
+pub const fn handle_unknown_action<'a>(cmd: &Command<'a>) -> Response<'a> {
     Response::error(cmd.id, ERROR_UNKNOWN_ACTION)
 }

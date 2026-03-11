@@ -12,7 +12,7 @@
 /// Each impl maps its internal errors into these variants so that
 /// `handle_client` can branch on disconnect vs. protocol errors
 /// without knowing the concrete transport type.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TransportError {
     /// Clean disconnect or connection lost — caller should exit the
     /// client loop and wait for the next connection (TCP/WS) or

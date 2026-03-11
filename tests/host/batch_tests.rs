@@ -117,7 +117,7 @@ fn batch_empty_rejected() {
     let json = r#"{"version":1,"id":"b4","interface":"batch","action":"run","commands":[]}"#;
     let bytes = json.as_bytes();
     let cmd = parse_command(bytes).unwrap();
-    let route = validate_route(&cmd).unwrap();
+    let _route = validate_route(&cmd).unwrap();
     let mut state = DeviceState::default();
     let resp = dispatch_batch(&cmd, &mut state);
     assert!(!resp.ok, "empty batch must return ok=false");
