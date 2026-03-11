@@ -41,6 +41,10 @@ pub const MAX_PAYLOAD_LEN: usize = 512;
 /// Maximum base64-encoded length of [`MAX_PAYLOAD_LEN`] bytes.
 pub const MAX_B64_LEN: usize = (MAX_PAYLOAD_LEN / 3 + 1) * 4;
 
+/// Maximum number of commands in a single batch request.
+/// Batches with more commands are rejected with [`ERROR_BATCH_TOO_LARGE`].
+pub const MAX_BATCH_SIZE: usize = 16;
+
 // --- Error code constants ---
 // All error strings are &'static str — part of the v1 protocol stability contract.
 // New codes may be added; existing codes must not be renamed.
@@ -60,6 +64,8 @@ pub const ERROR_PERIPHERAL_BUSY: &str = "peripheral_busy";
 pub const ERROR_PERIPHERAL_ERROR: &str = "peripheral_error";
 pub const ERROR_INVALID_ENCODING: &str = "invalid_encoding";
 pub const ERROR_WEBSOCKET_HANDSHAKE: &str = "ws_handshake_failed";
+pub const ERROR_BATCH_TOO_LARGE: &str = "batch_too_large";
+pub const ERROR_BATCH_EMPTY: &str = "batch_empty";
 
 /// ADC channel selector.
 ///
@@ -100,6 +106,76 @@ impl<'de> Deserialize<'de> for AdcChannel {
         }
         // serde-json-core requires an explicit type hint; use u64 for numeric-only channels.
         d.deserialize_u64(AdcChannelVisitor)
+    }
+}
+
+/// Inner command within a batch request.
+///
+/// Contains the same fields as [`Command`] but without the `commands` array,
+/// preventing recursive type definitions that would have unbounded stack size.
+/// `serde-json-core` deserializes each element of the `commands` array into this type.
+#[derive(Deserialize, Debug, PartialEq, Clone)]
+pub struct CommandInner<'a> {
+    pub version: Option<u8>,
+    pub id: &'a str,
+    pub interface: Option<&'a str>,
+    pub action: Option<&'a str>,
+    pub pin: Option<u8>,
+    pub value: Option<u8>,
+    pub mode: Option<&'a str>,
+    pub pull: Option<&'a str>,
+    pub uart: Option<u8>,
+    pub bytes: Option<&'a str>,
+    pub len: Option<usize>,
+    pub baud: Option<u32>,
+    pub data_bits: Option<u8>,
+    pub parity: Option<&'a str>,
+    pub stop_bits: Option<u8>,
+    pub spi: Option<u8>,
+    pub freq_hz: Option<u32>,
+    pub cpol: Option<u8>,
+    pub cpha: Option<u8>,
+    pub i2c: Option<u8>,
+    pub addr: Option<u8>,
+    pub write_bytes: Option<&'a str>,
+    pub read_len: Option<usize>,
+    pub channel: Option<u8>,
+    pub duty_u16: Option<u16>,
+    pub adc_channel: Option<AdcChannel>,
+}
+
+impl<'a> CommandInner<'a> {
+    /// Convert to a full [`Command`] with `commands: None` for use with [`crate::router::dispatch`].
+    pub fn to_command(&self) -> Command<'a> {
+        Command {
+            version: self.version,
+            id: self.id,
+            interface: self.interface,
+            action: self.action,
+            pin: self.pin,
+            value: self.value,
+            mode: self.mode,
+            pull: self.pull,
+            uart: self.uart,
+            bytes: self.bytes,
+            len: self.len,
+            baud: self.baud,
+            data_bits: self.data_bits,
+            parity: self.parity,
+            stop_bits: self.stop_bits,
+            spi: self.spi,
+            freq_hz: self.freq_hz,
+            cpol: self.cpol,
+            cpha: self.cpha,
+            i2c: self.i2c,
+            addr: self.addr,
+            write_bytes: self.write_bytes,
+            read_len: self.read_len,
+            channel: self.channel,
+            duty_u16: self.duty_u16,
+            adc_channel: self.adc_channel,
+            commands: None,
+        }
     }
 }
 
@@ -184,6 +260,13 @@ pub struct Command<'a> {
     // --- ADC (separate field to avoid name collision with PWM channel) ---
     /// ADC channel: 0, 1, 2, or `"temp"` for the onboard temperature sensor.
     pub adc_channel: Option<AdcChannel>,
+
+    // --- Batch ---
+    /// Inner commands for a `batch/run` request. `None` for all other interfaces.
+    ///
+    /// Capacity is `MAX_BATCH_SIZE + 1` so that serde-json-core can parse one extra element;
+    /// `dispatch_batch` rejects batches with `len > MAX_BATCH_SIZE` as `batch_too_large`.
+    pub commands: Option<heapless::Vec<CommandInner<'a>, { MAX_BATCH_SIZE + 1 }>>,
 }
 
 impl<'a> Command<'a> {
@@ -363,4 +446,65 @@ impl Default for FrameReader {
     fn default() -> Self {
         Self::new()
     }
+}
+
+// ── Batch response ────────────────────────────────────────────────────────────
+
+/// Serialization helper: wraps a `responses` slice in a `{"responses":[...]}` object.
+struct BatchData<'a>(&'a [Response<'a>]);
+
+impl<'a> serde::Serialize for BatchData<'a> {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut m = s.serialize_map(Some(1))?;
+        m.serialize_entry("responses", self.0)?;
+        m.end()
+    }
+}
+
+/// The result of a `batch/run` dispatch.
+///
+/// Returned by [`crate::router::dispatch_batch`] and serialized with
+/// [`serialize_batch_response`].
+pub struct BatchResponse<'a> {
+    /// Outer request id, echoed from the batch envelope.
+    pub id: &'a str,
+    /// `true` unless the batch itself is invalid (empty, too large).
+    pub ok: bool,
+    /// Collected inner responses; empty when `ok == false`.
+    pub responses: heapless::Vec<Response<'a>, MAX_BATCH_SIZE>,
+    /// Batch-level error (`batch_empty`, `batch_too_large`); `None` on success.
+    pub error: Option<&'static str>,
+}
+
+impl<'a> serde::Serialize for BatchResponse<'a> {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut m = s.serialize_map(Some(4))?;
+        m.serialize_entry("id", self.id)?;
+        m.serialize_entry("ok", &self.ok)?;
+        if self.ok {
+            m.serialize_entry("data", &BatchData(self.responses.as_slice()))?;
+        } else {
+            m.serialize_entry("data", &Option::<()>::None)?;
+        }
+        m.serialize_entry("error", &self.error)?;
+        m.end()
+    }
+}
+
+/// Serialize a [`BatchResponse`] to a byte buffer, appending a newline.
+///
+/// Returns the number of bytes written (including the newline).
+/// Returns `Err(ERROR_MSG_TOO_LARGE)` if the buffer is too small.
+pub fn serialize_batch_response<'a>(
+    resp: &BatchResponse<'a>,
+    buf: &mut [u8],
+) -> Result<usize, &'static str> {
+    let n = serde_json_core::to_slice(resp, buf).map_err(|_| ERROR_MSG_TOO_LARGE)?;
+    if n >= buf.len() {
+        return Err(ERROR_MSG_TOO_LARGE);
+    }
+    buf[n] = b'\n';
+    Ok(n + 1)
 }

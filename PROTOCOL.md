@@ -24,7 +24,7 @@ and connection management differ.
 {
   "version": 1,
   "id": "<opaque string>",
-  "interface": "<gpio|uart|spi|i2c|pwm|adc|usb|config|system>",
+  "interface": "<gpio|uart|spi|i2c|pwm|adc|usb|config|system|batch>",
   "action": "<action>",
   ...interface-specific fields...
 }
@@ -139,6 +139,41 @@ Channel mapping: `0` = GPIO26, `1` = GPIO27, `2` = GPIO28, `3` = onboard tempera
 |--------|-------------------|-----------------|
 | `get`  | _(none)_          | `{"ssid": "...", "ip": "...", "connected": bool}` |
 
+### `batch`
+
+Executes multiple commands in a single round-trip, reducing Wi-Fi latency overhead.
+
+| Action | Additional fields | Response `data` |
+|--------|-------------------|-----------------|
+| `run`  | `commands: [{...}, ...]` | `{"responses": [{...}, ...]}` |
+
+**Request:**
+```json
+{"version":1,"id":"b1","interface":"batch","action":"run","commands":[
+  {"version":1,"id":"1","interface":"gpio","action":"read","pin":0},
+  {"version":1,"id":"2","interface":"adc","action":"read","adc_channel":0},
+  {"version":1,"id":"3","interface":"gpio","action":"write","pin":1,"value":1}
+]}
+```
+
+**Response:**
+```json
+{"id":"b1","ok":true,"data":{"responses":[
+  {"id":"1","ok":false,"data":null,"error":"not_configured"},
+  {"id":"2","ok":false,"data":null,"error":"not_configured"},
+  {"id":"3","ok":false,"data":null,"error":"not_configured"}
+]},"error":null}
+```
+
+**Constraints:**
+- Maximum batch size: **16 commands**. Larger batches return `batch_too_large`.
+- Empty `commands` array returns `batch_empty`.
+- Each inner command is processed independently; an error in one command does not abort subsequent commands.
+- The serialized response must fit within `MAX_MSG_LEN` (1024 bytes); if it overflows, `msg_too_large` is returned for the whole batch.
+- Batches cannot be nested (no `batch/run` inside `commands`).
+
+---
+
 ### `system`
 
 | Action | Additional fields | Response `data` |
@@ -203,6 +238,8 @@ All error codes are lowercase snake_case `&str` values in the `"error"` field.
 | `peripheral_error` | Hardware-level error during operation |
 | `invalid_encoding` | Base64 `bytes` or `write_bytes` field is malformed |
 | `ws_handshake_failed` | WebSocket HTTP upgrade handshake failed (missing key, bad headers) |
+| `batch_empty` | `batch/run` received an empty `commands` array |
+| `batch_too_large` | `batch/run` received more than 16 commands |
 
 ---
 

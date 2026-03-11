@@ -38,6 +38,7 @@ fn make_i2c_cmd<'a>(
         channel: None,
         duty_u16: None,
         adc_channel: None,
+        commands: None,
     }
 }
 

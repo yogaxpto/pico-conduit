@@ -6,8 +6,8 @@
 
 use crate::interfaces::{i2c, pwm, spi, uart, usb};
 use crate::protocol::{
-    Command, ERROR_NOT_CONFIGURED, ERROR_UNKNOWN_ACTION, ERROR_UNKNOWN_INTERFACE, Response,
-    ResponseData,
+    BatchResponse, Command, ERROR_BATCH_EMPTY, ERROR_BATCH_TOO_LARGE, ERROR_NOT_CONFIGURED,
+    ERROR_UNKNOWN_ACTION, ERROR_UNKNOWN_INTERFACE, MAX_BATCH_SIZE, Response, ResponseData,
 };
 use core::fmt::Write as _;
 
@@ -67,6 +67,7 @@ static VALID_ROUTES: &[(&str, &[&str])] = &[
     ("usb", &["read", "write"]),
     ("config", &["get"]),
     ("system", &["get_version", "reboot_to_bootloader"]),
+    ("batch", &["run"]),
 ];
 
 /// Dispatch a command to the appropriate interface handler.
@@ -197,7 +198,69 @@ pub fn dispatch<'a>(
             Response::ok(cmd.id, None)
         }
 
+        // ---- Batch ----
+        // Batch is handled by dispatch_batch(); reaching here means the caller
+        // used dispatch() directly on a batch command, which is not supported.
+        ("batch", "run") => Response::error(cmd.id, ERROR_UNKNOWN_INTERFACE),
+
         // validate_route already rejected invalid routes
         _ => unreachable!(),
+    }
+}
+
+/// Dispatch a `batch/run` command, executing each inner command in order.
+///
+/// Returns a [`BatchResponse`] containing one [`Response`] per inner command.
+/// Errors at the batch level (empty list, too many commands) set `ok = false` and
+/// return a single error code — no inner responses are included.
+///
+/// Each inner command is dispatched independently; errors in one command do not
+/// abort subsequent commands.
+pub fn dispatch_batch<'a>(cmd: &Command<'a>, state: &mut DeviceState) -> BatchResponse<'a> {
+    let inner_cmds = match cmd.commands.as_ref() {
+        None => {
+            return BatchResponse {
+                id: cmd.id,
+                ok: false,
+                responses: heapless::Vec::new(),
+                error: Some(ERROR_BATCH_EMPTY),
+            };
+        }
+        Some(v) if v.is_empty() => {
+            return BatchResponse {
+                id: cmd.id,
+                ok: false,
+                responses: heapless::Vec::new(),
+                error: Some(ERROR_BATCH_EMPTY),
+            };
+        }
+        Some(v) => v,
+    };
+
+    if inner_cmds.len() > MAX_BATCH_SIZE {
+        return BatchResponse {
+            id: cmd.id,
+            ok: false,
+            responses: heapless::Vec::new(),
+            error: Some(ERROR_BATCH_TOO_LARGE),
+        };
+    }
+
+    let mut responses: heapless::Vec<Response<'a>, MAX_BATCH_SIZE> = heapless::Vec::new();
+    for inner in inner_cmds.iter() {
+        let full_cmd = inner.to_command();
+        let resp = match validate_route(&full_cmd) {
+            Err(r) => r,
+            Ok(route) => dispatch(&full_cmd, route, state),
+        };
+        // Vec capacity equals MAX_BATCH_SIZE and we checked len above, so push never fails.
+        let _ = responses.push(resp);
+    }
+
+    BatchResponse {
+        id: cmd.id,
+        ok: true,
+        responses,
+        error: None,
     }
 }

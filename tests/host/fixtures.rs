@@ -35,5 +35,6 @@ pub fn make_cmd<'a>(
         channel: None,
         duty_u16: None,
         adc_channel: None,
+        commands: None,
     }
 }

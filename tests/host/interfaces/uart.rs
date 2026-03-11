@@ -33,6 +33,7 @@ fn make_uart_cmd<'a>(id: &'a str, action: &'a str, uart: Option<u8>) -> Command<
         channel: None,
         duty_u16: None,
         adc_channel: None,
+        commands: None,
     }
 }
 

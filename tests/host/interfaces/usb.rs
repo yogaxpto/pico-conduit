@@ -31,6 +31,7 @@ fn make_usb_cmd<'a>(id: &'a str, action: &'a str) -> Command<'a> {
         channel: None,
         duty_u16: None,
         adc_channel: None,
+        commands: None,
     }
 }
 
