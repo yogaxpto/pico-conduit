@@ -3,7 +3,10 @@ use pico_socketeer::protocol::MAX_MSG_LEN;
 
 #[test]
 fn tcp_nodelay_is_enabled() {
-    assert!(TCP_NODELAY, "TCP_NODELAY must be true to eliminate Nagle delay");
+    assert!(
+        TCP_NODELAY,
+        "TCP_NODELAY must be true to eliminate Nagle delay"
+    );
 }
 
 #[test]

@@ -6,10 +6,10 @@
 
 use crate::interfaces::{i2c, pwm, spi, uart, usb};
 use crate::protocol::{
-    AdcChannel, BatchResponse, Command, EdgeTrigger, ERROR_ALREADY_SUBSCRIBED, ERROR_BATCH_EMPTY,
+    AdcChannel, BatchResponse, Command, ERROR_ALREADY_SUBSCRIBED, ERROR_BATCH_EMPTY,
     ERROR_BATCH_TOO_LARGE, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_NOT_SUBSCRIBED,
-    ERROR_SUBSCRIPTION_LIMIT, ERROR_UNKNOWN_ACTION, ERROR_UNKNOWN_INTERFACE, MAX_BATCH_SIZE,
-    MAX_SUBSCRIPTIONS, Response, ResponseData, Subscription, SubscriptionTarget,
+    ERROR_SUBSCRIPTION_LIMIT, ERROR_UNKNOWN_ACTION, ERROR_UNKNOWN_INTERFACE, EdgeTrigger,
+    MAX_BATCH_SIZE, MAX_SUBSCRIPTIONS, Response, ResponseData, Subscription, SubscriptionTarget,
 };
 use core::fmt::Write as _;
 
@@ -63,7 +63,10 @@ impl Default for DeviceState {
 /// Routing table: each entry maps an interface name to its valid actions.
 /// To add a new interface, add one row here — no other code in this file changes.
 static VALID_ROUTES: &[(&str, &[&str])] = &[
-    ("gpio", &["read", "write", "set_mode", "subscribe", "unsubscribe"]),
+    (
+        "gpio",
+        &["read", "write", "set_mode", "subscribe", "unsubscribe"],
+    ),
     ("uart", &["read", "write", "configure"]),
     ("spi", &["transfer", "write", "configure"]),
     ("i2c", &["read", "write", "write_read", "configure"]),
@@ -152,14 +155,18 @@ pub fn dispatch<'a>(
                 None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
             };
             if let Some(trigger_str) = cmd.trigger {
-                let trigger = match EdgeTrigger::from_str(trigger_str) {
+                let trigger = match EdgeTrigger::parse(trigger_str) {
                     Some(t) => t,
                     None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
                 };
                 handle_subscribe(cmd.id, SubscriptionTarget::GpioEdge { pin, trigger }, state)
             } else {
                 let interval_ms = cmd.interval_ms.unwrap_or(100);
-                handle_subscribe(cmd.id, SubscriptionTarget::GpioLevel { pin, interval_ms }, state)
+                handle_subscribe(
+                    cmd.id,
+                    SubscriptionTarget::GpioLevel { pin, interval_ms },
+                    state,
+                )
             }
         }
         ("gpio", "unsubscribe") => {
@@ -181,7 +188,14 @@ pub fn dispatch<'a>(
                 None => return Response::error(cmd.id, ERROR_MISSING_FIELD),
             };
             let interval_ms = cmd.interval_ms.unwrap_or(100);
-            handle_subscribe(cmd.id, SubscriptionTarget::Adc { channel, interval_ms }, state)
+            handle_subscribe(
+                cmd.id,
+                SubscriptionTarget::Adc {
+                    channel,
+                    interval_ms,
+                },
+                state,
+            )
         }
         ("adc", "unsubscribe") => {
             let channel = match cmd.adc_channel {
@@ -351,11 +365,7 @@ fn handle_unsubscribe_adc<'a>(
 }
 
 /// Remove a GPIO subscription (level or edge) by pin. Returns `not_subscribed` if none found.
-fn handle_unsubscribe_gpio<'a>(
-    id: &'a str,
-    pin: u8,
-    state: &mut DeviceState,
-) -> Response<'a> {
+fn handle_unsubscribe_gpio<'a>(id: &'a str, pin: u8, state: &mut DeviceState) -> Response<'a> {
     let before = state.subscriptions.len();
     state.subscriptions.retain(|s| match &s.target {
         SubscriptionTarget::GpioLevel { pin: p, .. } => *p != pin,

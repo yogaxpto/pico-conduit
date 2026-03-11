@@ -174,8 +174,7 @@ mod postcard_tests {
 
     #[test]
     fn postcard_adc_command_smaller_than_json() {
-        let json =
-            br#"{"version":1,"id":"a1","interface":"adc","action":"read","adc_channel":0}"#;
+        let json = br#"{"version":1,"id":"a1","interface":"adc","action":"read","adc_channel":0}"#;
         let json_len = json.len();
 
         let cmd = adc_read_cmd();
@@ -226,7 +225,13 @@ mod postcard_tests {
 
     #[test]
     fn postcard_codec_serializes_adc_read_response() {
-        let resp = Response::ok("adc1", Some(ResponseData::AdcRead { raw: 2048, voltage: 1.65 }));
+        let resp = Response::ok(
+            "adc1",
+            Some(ResponseData::AdcRead {
+                raw: 2048,
+                voltage: 1.65,
+            }),
+        );
         let mut buf = [0u8; 64];
         let n = PostcardCodec::serialize_response(&resp, &mut buf).unwrap();
         assert!(n > 0);

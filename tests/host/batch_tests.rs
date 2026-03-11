@@ -43,7 +43,10 @@ fn batch_unknown_action_returns_error() {
     let result = validate_route(&cmd);
     assert!(result.is_err());
     let err = result.unwrap_err();
-    assert_eq!(err.error, Some(pico_socketeer::protocol::ERROR_UNKNOWN_ACTION));
+    assert_eq!(
+        err.error,
+        Some(pico_socketeer::protocol::ERROR_UNKNOWN_ACTION)
+    );
 }
 
 // ── dispatch: single command ──────────────────────────────────────────────────
@@ -80,7 +83,10 @@ fn batch_multiple_commands_returns_ordered_responses() {
     let pos1 = s.find(r#""id":"r1""#).unwrap();
     let pos2 = s.find(r#""id":"r2""#).unwrap();
     let pos3 = s.find(r#""id":"r3""#).unwrap();
-    assert!(pos1 < pos2 && pos2 < pos3, "responses must be in command order");
+    assert!(
+        pos1 < pos2 && pos2 < pos3,
+        "responses must be in command order"
+    );
 }
 
 // ── dispatch: mixed success and failure ───────────────────────────────────────
@@ -125,9 +131,8 @@ fn batch_exceeds_max_rejected() {
     // Build a batch with MAX_BATCH_SIZE + 1 commands using minimal inner command JSON
     // so the total stays within MAX_MSG_LEN.
     // {"id":"0"} is 10 chars; 17 of them + commas + outer envelope ≈ 258 bytes < 1024.
-    let mut json = String::from(
-        r#"{"version":1,"id":"b","interface":"batch","action":"run","commands":["#,
-    );
+    let mut json =
+        String::from(r#"{"version":1,"id":"b","interface":"batch","action":"run","commands":["#);
     for i in 0..=MAX_BATCH_SIZE {
         if i > 0 {
             json.push(',');
@@ -159,5 +164,8 @@ fn error_batch_too_large_string() {
 
 #[test]
 fn max_batch_size_is_at_least_sixteen() {
-    assert!(MAX_BATCH_SIZE >= 16, "MAX_BATCH_SIZE must support ≥16 commands");
+    assert!(
+        MAX_BATCH_SIZE >= 16,
+        "MAX_BATCH_SIZE must support ≥16 commands"
+    );
 }

@@ -154,7 +154,12 @@ mod postcard_impl {
                 ResponseData::Version { version } => BinaryData::Version(version.clone()),
                 ResponseData::Config { .. } => BinaryData::Config,
             });
-            BinaryResponse { id: resp.id, ok: resp.ok, error: resp.error, data }
+            BinaryResponse {
+                id: resp.id,
+                ok: resp.ok,
+                error: resp.error,
+                data,
+            }
         }
     }
 }

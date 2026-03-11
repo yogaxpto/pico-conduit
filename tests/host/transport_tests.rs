@@ -266,7 +266,10 @@ fn pipelining_five_commands_return_five_ordered_responses() {
                 "response {i} has wrong id (ordering broken): {resp}"
             );
             assert!(resp.contains("\"ok\":true"), "response {i} not ok: {resp}");
-            assert!(resp.ends_with('\n'), "response {i} missing newline terminator");
+            assert!(
+                resp.ends_with('\n'),
+                "response {i} missing newline terminator"
+            );
         }
     });
 }
@@ -283,13 +286,26 @@ fn pipelining_malformed_command_does_not_abort_pipeline() {
         let mut transport = MockTransport::from_frames(cmds);
         run_handle_client(&mut transport).await;
 
-        assert_eq!(transport.written.len(), 3, "expected 3 responses (including error)");
+        assert_eq!(
+            transport.written.len(),
+            3,
+            "expected 3 responses (including error)"
+        );
         let r0 = core::str::from_utf8(&transport.written[0]).unwrap();
         let r1 = core::str::from_utf8(&transport.written[1]).unwrap();
         let r2 = core::str::from_utf8(&transport.written[2]).unwrap();
-        assert!(r0.contains("\"id\":\"q1\"") && r0.contains("\"ok\":true"), "q1 failed: {r0}");
-        assert!(r1.contains("\"ok\":false") && r1.contains(ERROR_MALFORMED_JSON), "error resp: {r1}");
-        assert!(r2.contains("\"id\":\"q3\"") && r2.contains("\"ok\":true"), "q3 failed: {r2}");
+        assert!(
+            r0.contains("\"id\":\"q1\"") && r0.contains("\"ok\":true"),
+            "q1 failed: {r0}"
+        );
+        assert!(
+            r1.contains("\"ok\":false") && r1.contains(ERROR_MALFORMED_JSON),
+            "error resp: {r1}"
+        );
+        assert!(
+            r2.contains("\"id\":\"q3\"") && r2.contains("\"ok\":true"),
+            "q3 failed: {r2}"
+        );
     });
 }
 

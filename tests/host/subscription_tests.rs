@@ -5,8 +5,8 @@
 
 use crate::fixtures::make_cmd;
 use pico_socketeer::protocol::{
-    AdcChannel, EdgeTrigger, ERROR_ALREADY_SUBSCRIBED, ERROR_MISSING_FIELD, ERROR_NOT_SUBSCRIBED,
-    ERROR_SUBSCRIPTION_LIMIT, MAX_SUBSCRIPTIONS,
+    AdcChannel, ERROR_ALREADY_SUBSCRIBED, ERROR_MISSING_FIELD, ERROR_NOT_SUBSCRIBED,
+    ERROR_SUBSCRIPTION_LIMIT, EdgeTrigger, MAX_SUBSCRIPTIONS,
 };
 use pico_socketeer::router::{DeviceState, dispatch, validate_route};
 
@@ -96,13 +96,20 @@ fn gpio_subscribe_edge_rising_adds_to_registry() {
     let route = validate_route(&cmd).unwrap();
     let resp = dispatch(&cmd, route, &mut state);
 
-    assert!(resp.ok, "gpio edge subscribe should succeed: {:?}", resp.error);
+    assert!(
+        resp.ok,
+        "gpio edge subscribe should succeed: {:?}",
+        resp.error
+    );
     assert_eq!(state.subscriptions.len(), 1);
 
     // Verify the stored target has the correct trigger
     use pico_socketeer::protocol::SubscriptionTarget;
     match &state.subscriptions[0].target {
-        SubscriptionTarget::GpioEdge { pin: 7, trigger: EdgeTrigger::Rising } => {}
+        SubscriptionTarget::GpioEdge {
+            pin: 7,
+            trigger: EdgeTrigger::Rising,
+        } => {}
         other => panic!("unexpected target: {other:?}"),
     }
 }
@@ -146,7 +153,11 @@ fn adc_duplicate_subscription_rejected() {
 
     assert!(!resp.ok, "duplicate subscribe must fail");
     assert_eq!(resp.error, Some(ERROR_ALREADY_SUBSCRIBED));
-    assert_eq!(state.subscriptions.len(), 1, "registry must not grow on duplicate");
+    assert_eq!(
+        state.subscriptions.len(),
+        1,
+        "registry must not grow on duplicate"
+    );
 }
 
 #[test]
@@ -293,22 +304,25 @@ fn subscriptions_cleared_on_device_state_reset() {
 
 #[test]
 fn edge_trigger_from_str_rising() {
-    assert_eq!(EdgeTrigger::from_str("edge_rising"), Some(EdgeTrigger::Rising));
+    assert_eq!(EdgeTrigger::parse("edge_rising"), Some(EdgeTrigger::Rising));
 }
 
 #[test]
 fn edge_trigger_from_str_falling() {
-    assert_eq!(EdgeTrigger::from_str("edge_falling"), Some(EdgeTrigger::Falling));
+    assert_eq!(
+        EdgeTrigger::parse("edge_falling"),
+        Some(EdgeTrigger::Falling)
+    );
 }
 
 #[test]
 fn edge_trigger_from_str_both() {
-    assert_eq!(EdgeTrigger::from_str("edge_both"), Some(EdgeTrigger::Both));
+    assert_eq!(EdgeTrigger::parse("edge_both"), Some(EdgeTrigger::Both));
 }
 
 #[test]
 fn edge_trigger_from_str_invalid() {
-    assert_eq!(EdgeTrigger::from_str("unknown"), None);
+    assert_eq!(EdgeTrigger::parse("unknown"), None);
 }
 
 // ── error constant strings ────────────────────────────────────────────────────

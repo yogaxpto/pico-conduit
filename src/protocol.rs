@@ -490,7 +490,7 @@ pub enum EdgeTrigger {
 
 impl EdgeTrigger {
     /// Parse from the wire string (`"edge_rising"`, `"edge_falling"`, `"edge_both"`).
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "edge_rising" => Some(Self::Rising),
             "edge_falling" => Some(Self::Falling),
@@ -504,7 +504,10 @@ impl EdgeTrigger {
 #[derive(Debug, PartialEq, Clone)]
 pub enum SubscriptionTarget {
     /// ADC channel polled at `interval_ms` rate.
-    Adc { channel: AdcChannel, interval_ms: u32 },
+    Adc {
+        channel: AdcChannel,
+        interval_ms: u32,
+    },
     /// GPIO pin polled at `interval_ms` rate.
     GpioLevel { pin: u8, interval_ms: u32 },
     /// GPIO pin edge-triggered (no interval — fires on hardware event).
