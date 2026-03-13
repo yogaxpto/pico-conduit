@@ -1,19 +1,35 @@
 # CI host test binary compilation.
 #
-# Builds on top of the deps image produced by the main Dockerfile.ci build job,
-# compiling host test binaries so the host-test CI job only needs to run them
-# (no source compilation at test time).
+# Two-stage build — Docker BuildKit runs both stages in PARALLEL when built
+# together (e.g. local --target final); CI builds each stage on a separate
+# GHA runner via host-build-pico2w / host-build-pico1w jobs.
+#
+# Stage graph:
+#
+#   ${DEPS_IMAGE} (ci:sha from build-pico2w) ─┬─ host-pico2w  (→ ci:host-pico2w-sha)
+#                                              └─ host-pico1w  (→ ci:host-pico1w-sha)
 #
 # Required build arg:
-#   DEPS_IMAGE — the ci:$sha image tag output by the build job
+#   DEPS_IMAGE — the ci:$sha image tag output by the build-pico2w job
 #
-# Usage:
-#   docker build \
-#     --build-arg DEPS_IMAGE=ghcr.io/.../ci:$sha \
-#     --file .github/Dockerfile.ci.host \
-#     -t ghcr.io/.../ci:host-$sha .
+# host-pico2w compiles:
+#   • board-agnostic host tests (--no-default-features)
+#   • pico2w board host tests  (--features pico2w)
+#   • client crate tests       (-p pico-socketeer-client)
+#
+# host-pico1w compiles:
+#   • pico1w board host tests  (--features pico1w)
+#
+# sccache is disabled in both stages (RUSTC_WRAPPER=) because dep artifacts
+# are already cached in /cache/target from the DEPS_IMAGE base.
 ARG DEPS_IMAGE
-FROM ${DEPS_IMAGE}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# host-pico2w: board-agnostic + pico2w board + client (3 compilations)
+#
+# Used by: host-build-pico2w job → host-test-pico2w job
+# ─────────────────────────────────────────────────────────────────────────────
+FROM ${DEPS_IMAGE} AS host-pico2w
 
 # Disable sccache — deps are already cached in /cache/target from the base image.
 ENV RUSTC_WRAPPER=
@@ -26,7 +42,23 @@ RUN . /etc/cargo-env \
        --target "$HOST_TRIPLE" --target-dir /cache/target \
     && cargo test --no-run --test host --no-default-features --features pico2w \
        --target "$HOST_TRIPLE" --target-dir /cache/target \
-    && cargo test --no-run --test host --no-default-features --features pico1w \
-       --target "$HOST_TRIPLE" --target-dir /cache/target \
     && cargo test --no-run -p pico-socketeer-client \
+       --target "$HOST_TRIPLE" --target-dir /cache/target
+
+# ─────────────────────────────────────────────────────────────────────────────
+# host-pico1w: pico1w board only (1 compilation)
+#
+# Used by: host-build-pico1w job → host-test-pico1w job
+# Both FROM the same DEPS_IMAGE (pico2w base with host toolchain); the pico1w
+# board flag is only a Cargo feature, not a different toolchain.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM ${DEPS_IMAGE} AS host-pico1w
+
+ENV RUSTC_WRAPPER=
+
+WORKDIR /src
+COPY . .
+
+RUN . /etc/cargo-env \
+    && cargo test --no-run --test host --no-default-features --features pico1w \
        --target "$HOST_TRIPLE" --target-dir /cache/target

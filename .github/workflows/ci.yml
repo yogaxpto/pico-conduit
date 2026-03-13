@@ -110,18 +110,19 @@ jobs:
             actions_cache_url=${{ env.ACTIONS_CACHE_URL }}
             actions_runtime_token=${{ env.ACTIONS_RUNTIME_TOKEN }}
 
-  # ── Host test binary compilation (fans out from build) ────────────
-  # Compiles host test binaries on a dedicated runner so host-test only runs
-  # pre-compiled binaries (no source compilation at test time).
-  host-build:
-    name: Build host test binaries
+  # ── Host test binary compilation: pico2w board ────────────────────
+  # Compiles board-agnostic + pico2w + client host test binaries.
+  # Runs in parallel with host-build-pico1w on a separate runner, so
+  # host-test-pico2w no longer waits for the pico1w compilation.
+  host-build-pico2w:
+    name: Build host test binaries (pico2w)
     needs: [build-pico2w]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     outputs:
-      image: ghcr.io/${{ github.repository }}/ci:host-${{ github.sha }}
+      image: ghcr.io/${{ github.repository }}/ci:host-pico2w-${{ github.sha }}
     steps:
       - uses: actions/checkout@v6
 
@@ -137,22 +138,56 @@ jobs:
         with:
           context: .
           file: .github/Dockerfile.ci.host
+          target: host-pico2w
           push: true
-          tags: ghcr.io/${{ github.repository }}/ci:host-${{ github.sha }}
+          tags: ghcr.io/${{ github.repository }}/ci:host-pico2w-${{ github.sha }}
           build-args: DEPS_IMAGE=${{ needs.build-pico2w.outputs.image }}
-          cache-from: type=gha,scope=host
-          cache-to: type=gha,mode=max,scope=host
+          cache-from: type=gha,scope=host-pico2w
+          cache-to: type=gha,mode=max,scope=host-pico2w
 
-  # ── Fast checks (run in parallel after build) ─────────────────────
-  lint:
+  # ── Host test binary compilation: pico1w board ────────────────────
+  # Compiles only the pico1w host test binary.
+  # Both host-build-* jobs use the pico2w deps image as DEPS_IMAGE because
+  # the host toolchain lives there; the board flag is a Cargo feature only.
+  host-build-pico1w:
+    name: Build host test binaries (pico1w)
+    needs: [build-pico2w]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ghcr.io/${{ github.repository }}/ci:host-pico1w-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: .github/Dockerfile.ci.host
+          target: host-pico1w
+          push: true
+          tags: ghcr.io/${{ github.repository }}/ci:host-pico1w-${{ github.sha }}
+          build-args: DEPS_IMAGE=${{ needs.build-pico2w.outputs.image }}
+          cache-from: type=gha,scope=host-pico1w
+          cache-to: type=gha,mode=max,scope=host-pico1w
+
+  # ── Fast checks: pico2w variants ─────────────────────────────────
+  # Starts as soon as build-pico2w is ready — does not wait for build-pico1w.
+  lint-pico2w:
     name: Lint (${{ matrix.board }})
-    needs: [build-pico2w, build-pico1w]
+    needs: [build-pico2w]
     runs-on: ubuntu-latest
     container:
-      image: >-
-        ${{ matrix.pico1w == true
-            && needs.build-pico1w.outputs.image
-            || needs.build-pico2w.outputs.image }}
+      image: ${{ needs.build-pico2w.outputs.image }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -163,35 +198,15 @@ jobs:
           - board: pico2w
             target: thumbv8m.main-none-eabihf
             cargo-features: ""
-            pico1w: false
-          - board: pico1w
-            target: thumbv6m-none-eabi
-            cargo-features: "--no-default-features --features embedded,pico1w,transport-tcp"
-            pico1w: true
           - board: pico2w-ws
             target: thumbv8m.main-none-eabihf
             cargo-features: "--no-default-features --features embedded,pico2w,transport-websocket"
-            pico1w: false
-          - board: pico1w-ws
-            target: thumbv6m-none-eabi
-            cargo-features: "--no-default-features --features embedded,pico1w,transport-websocket"
-            pico1w: true
           - board: pico2w-mqtt
             target: thumbv8m.main-none-eabihf
             cargo-features: "--no-default-features --features embedded,pico2w,transport-mqtt"
-            pico1w: false
-          - board: pico1w-mqtt
-            target: thumbv6m-none-eabi
-            cargo-features: "--no-default-features --features embedded,pico1w,transport-mqtt"
-            pico1w: true
           - board: pico2w-postcard
             target: thumbv8m.main-none-eabihf
             cargo-features: "--no-default-features --features embedded,pico2w,transport-tcp,codec-postcard"
-            pico1w: false
-          - board: pico1w-postcard
-            target: thumbv6m-none-eabi
-            cargo-features: "--no-default-features --features embedded,pico1w,transport-tcp,codec-postcard"
-            pico1w: true
     defaults:
       run:
         working-directory: ${{ github.workspace }}
@@ -231,12 +246,14 @@ jobs:
         if: matrix.board == 'pico2w'
         run: cargo clippy -p pico-socketeer-client --target ${{ steps.host.outputs.triple }} -- -D warnings
 
-  host-test:
-    name: Test (${{ matrix.board }})
-    needs: [host-build]
+  # ── Fast checks: pico1w variants ─────────────────────────────────
+  # Starts as soon as build-pico1w is ready — does not wait for build-pico2w.
+  lint-pico1w:
+    name: Lint (${{ matrix.board }})
+    needs: [build-pico1w]
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.host-build.outputs.image }}
+      image: ${{ needs.build-pico1w.outputs.image }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -244,10 +261,40 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - board: pico2w
-            cargo-features: "--features pico2w"
           - board: pico1w
-            cargo-features: "--features pico1w"
+            target: thumbv6m-none-eabi
+            cargo-features: "--no-default-features --features embedded,pico1w,transport-tcp"
+          - board: pico1w-ws
+            target: thumbv6m-none-eabi
+            cargo-features: "--no-default-features --features embedded,pico1w,transport-websocket"
+          - board: pico1w-mqtt
+            target: thumbv6m-none-eabi
+            cargo-features: "--no-default-features --features embedded,pico1w,transport-mqtt"
+          - board: pico1w-postcard
+            target: thumbv6m-none-eabi
+            cargo-features: "--no-default-features --features embedded,pico1w,transport-tcp,codec-postcard"
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Start sccache or disable
+        run: sccache --start-server 2>/dev/null || echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+
+      - name: Clippy (embedded firmware)
+        run: cargo clippy --release --target ${{ matrix.target }} ${{ matrix.cargo-features }} -- -D warnings
+
+  # ── Host tests: pico2w board ──────────────────────────────────────
+  host-test-pico2w:
+    name: Test (pico2w)
+    needs: [host-build-pico2w]
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.host-build-pico2w.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     defaults:
       run:
         working-directory: /src
@@ -259,23 +306,44 @@ jobs:
           echo "triple=${HOST_TRIPLE}" >> "$GITHUB_OUTPUT"
 
       - name: Host tests (board-independent)
-        if: matrix.board == 'pico2w'
         run: cargo test --test host --no-default-features --target ${{ steps.host.outputs.triple }}
 
-      - name: Board-specific tests (${{ matrix.board }})
-        run: cargo test --test host --no-default-features ${{ matrix.cargo-features }} --target ${{ steps.host.outputs.triple }}
+      - name: Board-specific tests (pico2w)
+        run: cargo test --test host --no-default-features --features pico2w --target ${{ steps.host.outputs.triple }}
 
       - name: Client crate tests
-        if: matrix.board == 'pico2w'
         run: cargo test -p pico-socketeer-client --target ${{ steps.host.outputs.triple }}
+
+  # ── Host tests: pico1w board ──────────────────────────────────────
+  host-test-pico1w:
+    name: Test (pico1w)
+    needs: [host-build-pico1w]
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.host-build-pico1w.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        working-directory: /src
+    steps:
+      - name: Resolve host target
+        id: host
+        run: |
+          . /etc/cargo-env
+          echo "triple=${HOST_TRIPLE}" >> "$GITHUB_OUTPUT"
+
+      - name: Board-specific tests (pico1w)
+        run: cargo test --test host --no-default-features --features pico1w --target ${{ steps.host.outputs.triple }}
 
   # ── Firmware build (gates on lint + tests passing) ─────────────────
   # Source is not pre-compiled in the deps image; cargo build --release here
-  # does the full LTO compilation. Seven matrix items run in parallel, each on
+  # does the full LTO compilation. Eight matrix items run in parallel, each on
   # a dedicated runner.
   build-firmware:
     name: Build Firmware (${{ matrix.board }})
-    needs: [build-pico2w, build-pico1w, lint, host-test]
+    needs: [build-pico2w, build-pico1w, lint-pico2w, lint-pico1w, host-test-pico2w, host-test-pico1w]
     runs-on: ubuntu-latest
     container:
       image: >-
