@@ -57,7 +57,7 @@ ENV RUSTC_WRAPPER=sccache
 ENV SCCACHE_GHA_ENABLED=true
 
 # Compute host triple once; downstream stages source this file.
-RUN echo "export HOST_TRIPLE=$(rustc -vV | sed -n 's/host: //p')" > /tmp/host-env.sh
+RUN echo "export HOST_TRIPLE=$(rustc -vV | sed -n 's/host: //p')" > /etc/cargo-env
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared dummy-source setup helper (macro to avoid repeating COPY + stubs)
@@ -94,6 +94,9 @@ RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
       --target-dir /cache/target 2>&1 || true \
  && cargo build --release --target thumbv8m.main-none-eabihf \
       --no-default-features --features embedded,pico2w,transport-mqtt --lib \
+      --target-dir /cache/target 2>&1 || true \
+ && cargo build --release --target thumbv8m.main-none-eabihf \
+      --no-default-features --features embedded,pico2w,transport-tcp,codec-postcard --lib \
       --target-dir /cache/target 2>&1 || true \
  && sccache --show-stats
 
@@ -162,7 +165,7 @@ RUN mkdir -p src \
 
 RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
     --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
-    . /tmp/host-env.sh \
+    . /etc/cargo-env \
     && cargo test --no-run --test host --no-default-features \
        --target "$HOST_TRIPLE" --target-dir /cache/target 2>&1 || true \
     && cargo test --no-run --test host --no-default-features --features pico2w \
@@ -192,6 +195,7 @@ RUN set -e; \
       "--release --target thumbv8m.main-none-eabihf" \
       "--release --target thumbv8m.main-none-eabihf --no-default-features --features embedded,pico2w,transport-websocket" \
       "--release --target thumbv8m.main-none-eabihf --no-default-features --features embedded,pico2w,transport-mqtt" \
+      "--release --target thumbv8m.main-none-eabihf --no-default-features --features embedded,pico2w,transport-tcp,codec-postcard" \
     ; do \
       cargo clippy $ARGS --target-dir /cache/target -- -D warnings; \
       cargo build $ARGS --target-dir /cache/target; \
@@ -227,7 +231,7 @@ ENV RUSTC_WRAPPER=
 WORKDIR /src
 COPY . .
 
-RUN . /tmp/host-env.sh \
+RUN . /etc/cargo-env \
     && cargo test --no-run --test host --no-default-features \
        --target "$HOST_TRIPLE" --target-dir /cache/target \
     && cargo test --no-run --test host --no-default-features --features pico2w \
@@ -263,4 +267,4 @@ RUN find /tmp/cache-host -mindepth 1 -maxdepth 1 \
       -exec cp -r {} /cache/target/ \; \
     && rm -rf /tmp/cache-host
 
-RUN rm -f /tmp/host-env.sh
+# /etc/cargo-env (host triple) is intentionally kept in the final image.

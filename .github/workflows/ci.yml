@@ -72,6 +72,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - board: pico2w
@@ -92,6 +93,9 @@ jobs:
           - board: pico1w-mqtt
             target: thumbv6m-none-eabi
             cargo-features: "--no-default-features --features embedded,pico1w,transport-mqtt"
+          - board: pico2w-postcard
+            target: thumbv8m.main-none-eabihf
+            cargo-features: "--no-default-features --features embedded,pico2w,transport-tcp,codec-postcard"
     defaults:
       run:
         working-directory: /src
@@ -99,11 +103,19 @@ jobs:
       - name: Resolve host target
         id: host
         run: |
-          echo "triple=$(rustc -vV | sed -n 's/host: //p')" >> "$GITHUB_OUTPUT"
+          . /etc/cargo-env
+          echo "triple=${HOST_TRIPLE}" >> "$GITHUB_OUTPUT"
 
       - name: Format check
         if: matrix.board == 'pico2w'
         run: cargo fmt --all --check
+
+      - name: Transport exclusivity guard
+        if: matrix.board == 'pico2w'
+        run: |
+          cargo check --no-default-features \
+            --features embedded,pico2w,transport-tcp,transport-websocket 2>&1 \
+            | grep -q "mutually exclusive"
 
       - name: Clippy (embedded firmware)
         run: cargo clippy --release --target ${{ matrix.target }} ${{ matrix.cargo-features }} -- -D warnings
@@ -111,25 +123,6 @@ jobs:
       - name: Clippy (client crate)
         if: matrix.board == 'pico2w'
         run: cargo clippy -p pico-socketeer-client --target ${{ steps.host.outputs.triple }} -- -D warnings
-
-  check-exclusivity:
-    name: Transport Exclusivity Guard
-    needs: [build]
-    runs-on: ubuntu-latest
-    container:
-      image: ${{ needs.build.outputs.image }}
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    defaults:
-      run:
-        working-directory: /src
-    steps:
-      - name: Two transports must not compile
-        run: |
-          cargo check --no-default-features \
-            --features embedded,pico2w,transport-tcp,transport-websocket 2>&1 \
-            | grep -q "mutually exclusive"
 
   host-test:
     name: Test (${{ matrix.board }})
@@ -141,6 +134,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - board: pico2w
@@ -154,7 +148,8 @@ jobs:
       - name: Resolve host target
         id: host
         run: |
-          echo "triple=$(rustc -vV | sed -n 's/host: //p')" >> "$GITHUB_OUTPUT"
+          . /etc/cargo-env
+          echo "triple=${HOST_TRIPLE}" >> "$GITHUB_OUTPUT"
 
       - name: Host tests (board-independent)
         if: matrix.board == 'pico2w'
@@ -180,6 +175,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     strategy:
+      fail-fast: false
       matrix:
         include:
           - board: pico2w
@@ -227,14 +223,22 @@ jobs:
           TEXT=$(size "$FIRMWARE" | awk 'NR==2 {print $1}')
           DATA=$(size "$FIRMWARE" | awk 'NR==2 {print $2}')
           USED=$(( TEXT + DATA ))
+          REMAINING=$(( FLASH_MAX - USED ))
 
           echo "Flash budget : ${FLASH_MAX} bytes (${{ matrix.flash-desc }} − 8 KB credentials)"
           echo "Firmware size: ${USED} bytes  (text=${TEXT}, data=${DATA})"
-          echo "Remaining    : $(( FLASH_MAX - USED )) bytes"
+          echo "Remaining    : ${REMAINING} bytes"
 
+          printf '| Board | Used (bytes) | Budget (bytes) | Remaining | Status |\n' >> "$GITHUB_STEP_SUMMARY"
+          printf '|-------|-------------|----------------|-----------|--------|\n' >> "$GITHUB_STEP_SUMMARY"
           if [ "$USED" -gt "$FLASH_MAX" ]; then
+            printf '| %s | %s | %s | %s | :x: FAIL |\n' \
+              "${{ matrix.board }}" "$USED" "$FLASH_MAX" "$REMAINING" >> "$GITHUB_STEP_SUMMARY"
             echo "FAIL: firmware exceeds flash capacity by $(( USED - FLASH_MAX )) bytes"
             exit 1
+          else
+            printf '| %s | %s | %s | %s | :white_check_mark: ok |\n' \
+              "${{ matrix.board }}" "$USED" "$FLASH_MAX" "$REMAINING" >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload ELF artifact
