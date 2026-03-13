@@ -4,8 +4,12 @@ on:
   push:
     branches: [master]
     tags: ["v*"]
+    paths-ignore:
+      - '**.md'
   pull_request:
     branches: [master]
+    paths-ignore:
+      - '**.md'
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -227,8 +231,7 @@ jobs:
           FLASH_MAX=${{ matrix.flash-max }}
 
           FIRMWARE=${CARGO_TARGET_DIR}/${{ matrix.target }}/release/pico-socketeer
-          TEXT=$(size "$FIRMWARE" | awk 'NR==2 {print $1}')
-          DATA=$(size "$FIRMWARE" | awk 'NR==2 {print $2}')
+          read TEXT DATA <<< "$(size "$FIRMWARE" | awk 'NR==2 {print $1, $2}')"
           USED=$(( TEXT + DATA ))
           REMAINING=$(( FLASH_MAX - USED ))
 

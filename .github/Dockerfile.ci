@@ -159,10 +159,10 @@ COPY . .
 
 RUN set -e; \
     for ARGS in \
-      "--release --target thumbv8m.main-none-eabihf" \
       "--release --target thumbv8m.main-none-eabihf --no-default-features --features embedded,pico2w,transport-websocket" \
       "--release --target thumbv8m.main-none-eabihf --no-default-features --features embedded,pico2w,transport-mqtt" \
       "--release --target thumbv8m.main-none-eabihf --no-default-features --features embedded,pico2w,transport-tcp,codec-postcard" \
+      "--release --target thumbv8m.main-none-eabihf" \
     ; do \
       cargo clippy $ARGS --target-dir /cache/target -- -D warnings; \
       cargo build $ARGS --target-dir /cache/target; \
@@ -180,9 +180,9 @@ COPY . .
 
 RUN set -e; \
     for ARGS in \
-      "--release --target thumbv6m-none-eabi --no-default-features --features embedded,pico1w,transport-tcp" \
       "--release --target thumbv6m-none-eabi --no-default-features --features embedded,pico1w,transport-websocket" \
       "--release --target thumbv6m-none-eabi --no-default-features --features embedded,pico1w,transport-mqtt" \
+      "--release --target thumbv6m-none-eabi --no-default-features --features embedded,pico1w,transport-tcp" \
     ; do \
       cargo clippy $ARGS --target-dir /cache/target -- -D warnings; \
       cargo build $ARGS --target-dir /cache/target; \
