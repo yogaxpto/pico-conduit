@@ -115,6 +115,8 @@ FROM deps-stub AS deps-thumbv8m
 
 RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
     --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
+    sccache --start-server 2>/dev/null || export RUSTC_WRAPPER=; \
+    mkdir -p /cache/target; \
     cargo build --release --target thumbv8m.main-none-eabihf --lib \
       --target-dir /cache/target 2>&1 || true \
  && cargo build --release --target thumbv8m.main-none-eabihf \
@@ -125,8 +127,8 @@ RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
       --target-dir /cache/target 2>&1 || true \
  && cargo build --release --target thumbv8m.main-none-eabihf \
       --no-default-features --features embedded,pico2w,transport-tcp,codec-postcard --lib \
-      --target-dir /cache/target 2>&1 || true \
- && sccache --show-stats
+      --target-dir /cache/target 2>&1 || true; \
+    sccache --show-stats 2>/dev/null || true
 
 # ─────────────────────────────────────────────────────────────────────────────
 # deps-thumbv6m: pre-compile dependencies for all pico1w feature combos
@@ -135,8 +137,9 @@ FROM deps-stub AS deps-thumbv6m
 
 RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
     --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
-    mkdir -p /cache/target/thumbv6m-none-eabi \
- && cargo build --release --target thumbv6m-none-eabi \
+    sccache --start-server 2>/dev/null || export RUSTC_WRAPPER=; \
+    mkdir -p /cache/target/thumbv6m-none-eabi; \
+    cargo build --release --target thumbv6m-none-eabi \
       --no-default-features --features embedded,pico1w,transport-tcp --lib \
       --target-dir /cache/target 2>&1 || true \
  && cargo build --release --target thumbv6m-none-eabi \
@@ -144,8 +147,8 @@ RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
       --target-dir /cache/target 2>&1 || true \
  && cargo build --release --target thumbv6m-none-eabi \
       --no-default-features --features embedded,pico1w,transport-mqtt --lib \
-      --target-dir /cache/target 2>&1 || true \
- && sccache --show-stats
+      --target-dir /cache/target 2>&1 || true; \
+    sccache --show-stats 2>/dev/null || true
 
 # ─────────────────────────────────────────────────────────────────────────────
 # deps-host: pre-compile dependencies for host tests and client crate
@@ -154,6 +157,8 @@ FROM deps-stub AS deps-host
 
 RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
     --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
+    sccache --start-server 2>/dev/null || export RUSTC_WRAPPER=; \
+    mkdir -p /cache/target; \
     . /etc/cargo-env \
     && cargo test --no-run --test host --no-default-features \
        --target "$HOST_TRIPLE" --target-dir /cache/target 2>&1 || true \
@@ -162,8 +167,8 @@ RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
     && cargo test --no-run --test host --no-default-features --features pico1w \
        --target "$HOST_TRIPLE" --target-dir /cache/target 2>&1 || true \
     && cargo test --no-run -p pico-socketeer-client \
-       --target "$HOST_TRIPLE" --target-dir /cache/target 2>&1 || true \
-    && sccache --show-stats
+       --target "$HOST_TRIPLE" --target-dir /cache/target 2>&1 || true; \
+    sccache --show-stats 2>/dev/null || true
 
 # ─────────────────────────────────────────────────────────────────────────────
 # final: merge all three deps subtrees into one image
