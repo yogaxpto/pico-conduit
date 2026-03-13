@@ -4,11 +4,12 @@
 #
 # Stage graph:
 #
-#   base (tools + toolchain)
-#    └─ deps-stub (shared dummy-source setup)
-#        ├─ deps-thumbv8m ──────────────────── source-thumbv8m ─┐
-#        ├─ deps-thumbv6m ──────────────────── source-thumbv6m ─┤─ final
-#        └─ deps-host     ──────────────────── source-host ─────┘
+#   base-tools (system packages + binary tools)
+#    └─ base (toolchain install)
+#        └─ deps-stub (shared dummy-source setup)
+#            ├─ deps-thumbv8m ──────────────────── source-thumbv8m ─┐
+#            ├─ deps-thumbv6m ──────────────────── source-thumbv6m ─┤─ final
+#            └─ deps-host     ──────────────────── source-host ─────┘
 #
 # deps-stub holds the COPY + stub-source RUN that is identical across all three
 # deps-* stages. BuildKit caches it once; all three deps-* stages branch from it
@@ -21,19 +22,20 @@
 #   - sccache provides per-crate caching across Docker layer invalidations
 
 # ─────────────────────────────────────────────────────────────────────────────
-# base: toolchain + tools, shared by all subsequent stages
+# base-tools: system packages + cargo binary tools
+#
+# This layer is stable: it only rebuilds when tool versions or APK packages
+# change, NOT when rust-toolchain.toml is bumped.  Separating it from the
+# toolchain layer prevents a Rust stable update from re-downloading sccache,
+# flip-link, and elf2uf2-rs (~1-2 min) unnecessarily.
 # ─────────────────────────────────────────────────────────────────────────────
-FROM rust:1-alpine AS base
+FROM rust:1-alpine AS base-tools
 
 # System deps:
 #   git       — required by cargo for git dependencies
 #   binutils  — provides `size` (used in flash budget check)
 #   curl      — needed for cargo-binstall download
 RUN apk add --no-cache git binutils curl
-
-# Rust targets and components (driven by rust-toolchain.toml)
-COPY rust-toolchain.toml /tmp/
-RUN cd /tmp && rustup show && rm /tmp/rust-toolchain.toml
 
 # cargo-binstall: pre-built binary (~2 seconds vs ~3-5 min compiling)
 RUN set -eux; \
@@ -51,14 +53,26 @@ RUN set -eux; \
 # installing anything at release time.
 RUN cargo binstall flip-link sccache elf2uf2-rs --no-confirm --force
 
+# Compute host triple once; downstream stages source this file.
+RUN echo "export HOST_TRIPLE=$(rustc -vV | sed -n 's/host: //p')" > /etc/cargo-env
+
+# ─────────────────────────────────────────────────────────────────────────────
+# base: toolchain install on top of base-tools
+#
+# Invalidated only when rust-toolchain.toml changes.  All downstream stages
+# continue to use `FROM base` so no other references change.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM base-tools AS base
+
+# Rust targets and components (driven by rust-toolchain.toml)
+COPY rust-toolchain.toml /tmp/
+RUN cd /tmp && rustup show && rm /tmp/rust-toolchain.toml
+
 # Enable sccache for all cargo invocations.
 # ACTIONS_CACHE_URL and ACTIONS_RUNTIME_TOKEN are injected at build time
 # via Docker --mount=type=secret so sccache can read/write the GHA cache.
 ENV RUSTC_WRAPPER=sccache
 ENV SCCACHE_GHA_ENABLED=true
-
-# Compute host triple once; downstream stages source this file.
-RUN echo "export HOST_TRIPLE=$(rustc -vV | sed -n 's/host: //p')" > /etc/cargo-env
 
 # ─────────────────────────────────────────────────────────────────────────────
 # deps-stub: dummy-source setup shared by all three deps-* stages
@@ -146,7 +160,8 @@ RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
     && sccache --show-stats
 
 # ─────────────────────────────────────────────────────────────────────────────
-# source-thumbv8m: clippy + build for all pico2w (thumbv8m) variants
+# source-thumbv8m: build for all pico2w (thumbv8m) variants
+# (clippy runs in the parallel lint CI job matrix — no need to duplicate it here)
 # ─────────────────────────────────────────────────────────────────────────────
 FROM deps-thumbv8m AS source-thumbv8m
 
@@ -164,12 +179,12 @@ RUN set -e; \
       "--release --target thumbv8m.main-none-eabihf --no-default-features --features embedded,pico2w,transport-tcp,codec-postcard" \
       "--release --target thumbv8m.main-none-eabihf" \
     ; do \
-      cargo clippy $ARGS --target-dir /cache/target -- -D warnings; \
       cargo build $ARGS --target-dir /cache/target; \
     done
 
 # ─────────────────────────────────────────────────────────────────────────────
-# source-thumbv6m: clippy + build for all pico1w (thumbv6m) variants
+# source-thumbv6m: build for all pico1w (thumbv6m) variants
+# (clippy runs in the parallel lint CI job matrix — no need to duplicate it here)
 # ─────────────────────────────────────────────────────────────────────────────
 FROM deps-thumbv6m AS source-thumbv6m
 
@@ -184,7 +199,6 @@ RUN set -e; \
       "--release --target thumbv6m-none-eabi --no-default-features --features embedded,pico1w,transport-mqtt" \
       "--release --target thumbv6m-none-eabi --no-default-features --features embedded,pico1w,transport-tcp" \
     ; do \
-      cargo clippy $ARGS --target-dir /cache/target -- -D warnings; \
       cargo build $ARGS --target-dir /cache/target; \
     done
 
@@ -206,9 +220,7 @@ RUN . /etc/cargo-env \
     && cargo test --no-run --test host --no-default-features --features pico1w \
        --target "$HOST_TRIPLE" --target-dir /cache/target \
     && cargo test --no-run -p pico-socketeer-client \
-       --target "$HOST_TRIPLE" --target-dir /cache/target \
-    && cargo clippy -p pico-socketeer-client \
-       --target "$HOST_TRIPLE" --target-dir /cache/target -- -D warnings
+       --target "$HOST_TRIPLE" --target-dir /cache/target
 
 # ─────────────────────────────────────────────────────────────────────────────
 # final: merge all three architecture subtrees into one image
