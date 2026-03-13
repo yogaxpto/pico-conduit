@@ -52,9 +52,11 @@ jobs:
           context: .
           file: .github/Dockerfile.ci
           push: true
+          # Always push a SHA-pinned tag (used by downstream jobs via outputs.image).
+          # Push `latest` only on master so concurrent PR builds don't race on it.
           tags: |
             ghcr.io/${{ github.repository }}/ci:${{ github.sha }}
-            ghcr.io/${{ github.repository }}/ci:latest
+            ${{ github.ref == 'refs/heads/master' && format('ghcr.io/{0}/ci:latest', github.repository) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           secrets: |
@@ -203,6 +205,11 @@ jobs:
             cargo-features: "--no-default-features --features embedded,pico2w,transport-mqtt"
             flash-max: 4186112
             flash-desc: "4 MB"
+          - board: pico2w-postcard
+            target: thumbv8m.main-none-eabihf
+            cargo-features: "--no-default-features --features embedded,pico2w,transport-tcp,codec-postcard"
+            flash-max: 4186112
+            flash-desc: "4 MB"
           - board: pico1w-mqtt
             target: thumbv6m-none-eabi
             cargo-features: "--no-default-features --features embedded,pico1w,transport-mqtt"
@@ -249,26 +256,37 @@ jobs:
           retention-days: 5
 
   # ── Release (only on version tags) ─────────────────────────────────
+  # ELFs are pre-built in the CI image; elf2uf2-rs is installed in the base
+  # stage, so no tool installation or artifact download is needed here.
   release:
     name: Release UF2
-    needs: build-firmware
+    needs: [build, build-firmware]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.build.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       contents: write
+      packages: read
     steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: firmware-elf-pico2w
+      - name: Convert pico2w ELF to UF2
+        run: |
+          elf2uf2-rs \
+            /cache/target/thumbv8m.main-none-eabihf/release/pico-socketeer \
+            pico-socketeer-pico2w.uf2
 
-      - uses: cargo-bins/cargo-binstall@v1.17.6
-      - name: Install elf2uf2-rs
-        run: cargo binstall elf2uf2-rs --no-confirm --locked
+      - name: Convert pico1w ELF to UF2
+        run: |
+          elf2uf2-rs \
+            /cache/target/thumbv6m-none-eabi/release/pico-socketeer \
+            pico-socketeer-pico1w.uf2
 
-      - name: Convert ELF to UF2
-        run: elf2uf2-rs pico-socketeer pico-socketeer.uf2
-
-      - name: Upload UF2 to GitHub Release
+      - name: Upload UF2s to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: pico-socketeer.uf2
+          files: |
+            pico-socketeer-pico2w.uf2
+            pico-socketeer-pico1w.uf2

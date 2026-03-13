@@ -5,20 +5,19 @@
 # Stage graph:
 #
 #   base (tools + toolchain)
-#    ├─ deps-thumbv8m ──────────────────── source-thumbv8m ─┐
-#    ├─ deps-thumbv6m ──────────────────── source-thumbv6m ─┤─ final
-#    └─ deps-host     ──────────────────── source-host ─────┘
+#    └─ deps-stub (shared dummy-source setup)
+#        ├─ deps-thumbv8m ──────────────────── source-thumbv8m ─┐
+#        ├─ deps-thumbv6m ──────────────────── source-thumbv6m ─┤─ final
+#        └─ deps-host     ──────────────────── source-host ─────┘
 #
-# All three `deps-*` stages build in parallel from `base`.
-# All three `source-*` stages build in parallel from their respective `deps-*`.
-# `final` merges the non-overlapping /cache/target subtrees:
-#   thumbv8m.main-none-eabihf/  (from source-thumbv8m)
-#   thumbv6m-none-eabi/         (from source-thumbv6m)
-#   {host-triple}/              (from source-host)
+# deps-stub holds the COPY + stub-source RUN that is identical across all three
+# deps-* stages. BuildKit caches it once; all three deps-* stages branch from it
+# and still build in parallel.
 #
 # Layer caching strategy:
-#   - Dependency layers use the "dummy source" trick (cached when Cargo.lock unchanged)
-#   - Source layers rebuild every push, but reuse cached dep artifacts
+#   - deps-stub is cached when Cargo.lock (and Cargo.toml, build.rs) are unchanged
+#   - deps-* stages add only their cargo build/test --no-run invocations on top
+#   - Source layers rebuild every push, but reuse cached dep artifacts via sccache
 #   - sccache provides per-crate caching across Docker layer invalidations
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -48,7 +47,9 @@ RUN set -eux; \
       | tar xz -C /usr/local/cargo/bin
 
 # Tools + sccache (shared compilation cache, uses GHA cache backend)
-RUN cargo binstall flip-link sccache --no-confirm --force
+# elf2uf2-rs is included so the release job can convert ELFs without
+# installing anything at release time.
+RUN cargo binstall flip-link sccache elf2uf2-rs --no-confirm --force
 
 # Enable sccache for all cargo invocations.
 # ACTIONS_CACHE_URL and ACTIONS_RUNTIME_TOKEN are injected at build time
@@ -60,12 +61,15 @@ ENV SCCACHE_GHA_ENABLED=true
 RUN echo "export HOST_TRIPLE=$(rustc -vV | sed -n 's/host: //p')" > /etc/cargo-env
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Shared dummy-source setup helper (macro to avoid repeating COPY + stubs)
+# deps-stub: dummy-source setup shared by all three deps-* stages
+#
+# Copies only manifest files (Cargo.toml, Cargo.lock, build.rs) and replaces
+# source files with minimal stubs so that `cargo build/test --no-run` can
+# download and compile all dependencies without touching project source.
+# This layer is cached whenever Cargo.lock is unchanged, giving fast deps
+# rebuilds on source-only pushes.
 # ─────────────────────────────────────────────────────────────────────────────
-
-# deps-thumbv8m: pre-compile dependencies for all three pico2w feature combos
-# ─────────────────────────────────────────────────────────────────────────────
-FROM base AS deps-thumbv8m
+FROM base AS deps-stub
 
 WORKDIR /tmp/deps
 
@@ -84,6 +88,11 @@ RUN mkdir -p src \
     && mkdir -p tests/host tests/integration \
     && echo 'fn main(){}' > tests/host/main.rs \
     && echo 'fn main(){}' > tests/integration/main.rs
+
+# ─────────────────────────────────────────────────────────────────────────────
+# deps-thumbv8m: pre-compile dependencies for all pico2w feature combos
+# ─────────────────────────────────────────────────────────────────────────────
+FROM deps-stub AS deps-thumbv8m
 
 RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
     --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
@@ -100,30 +109,10 @@ RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
       --target-dir /cache/target 2>&1 || true \
  && sccache --show-stats
 
-RUN rm -rf /tmp/deps
-
 # ─────────────────────────────────────────────────────────────────────────────
-# deps-thumbv6m: pre-compile dependencies for all three pico1w feature combos
+# deps-thumbv6m: pre-compile dependencies for all pico1w feature combos
 # ─────────────────────────────────────────────────────────────────────────────
-FROM base AS deps-thumbv6m
-
-WORKDIR /tmp/deps
-
-COPY Cargo.toml Cargo.lock rust-toolchain.toml build.rs ./
-COPY .cargo .cargo/
-COPY memory-pico2w.x memory-pico1w.x ./
-COPY client/Cargo.toml client/Cargo.toml
-COPY macros/Cargo.toml macros/Cargo.toml
-
-RUN mkdir -p src \
-    && echo '#![no_std]' > src/lib.rs \
-    && mkdir -p client/src \
-    && echo '' > client/src/lib.rs \
-    && mkdir -p macros/src \
-    && printf 'use proc_macro::TokenStream;\n#[proc_macro_attribute]\npub fn require_env(_: TokenStream, item: TokenStream) -> TokenStream { item }\n' > macros/src/lib.rs \
-    && mkdir -p tests/host tests/integration \
-    && echo 'fn main(){}' > tests/host/main.rs \
-    && echo 'fn main(){}' > tests/integration/main.rs
+FROM deps-stub AS deps-thumbv6m
 
 RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
     --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
@@ -138,30 +127,10 @@ RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
       --target-dir /cache/target 2>&1 || true \
  && sccache --show-stats
 
-RUN rm -rf /tmp/deps
-
 # ─────────────────────────────────────────────────────────────────────────────
 # deps-host: pre-compile dependencies for host tests and client crate
 # ─────────────────────────────────────────────────────────────────────────────
-FROM base AS deps-host
-
-WORKDIR /tmp/deps
-
-COPY Cargo.toml Cargo.lock rust-toolchain.toml build.rs ./
-COPY .cargo .cargo/
-COPY memory-pico2w.x memory-pico1w.x ./
-COPY client/Cargo.toml client/Cargo.toml
-COPY macros/Cargo.toml macros/Cargo.toml
-
-RUN mkdir -p src \
-    && echo '#![no_std]' > src/lib.rs \
-    && mkdir -p client/src \
-    && echo '' > client/src/lib.rs \
-    && mkdir -p macros/src \
-    && printf 'use proc_macro::TokenStream;\n#[proc_macro_attribute]\npub fn require_env(_: TokenStream, item: TokenStream) -> TokenStream { item }\n' > macros/src/lib.rs \
-    && mkdir -p tests/host tests/integration \
-    && echo 'fn main(){}' > tests/host/main.rs \
-    && echo 'fn main(){}' > tests/integration/main.rs
+FROM deps-stub AS deps-host
 
 RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
     --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
@@ -175,8 +144,6 @@ RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
     && cargo test --no-run -p pico-socketeer-client \
        --target "$HOST_TRIPLE" --target-dir /cache/target 2>&1 || true \
     && sccache --show-stats
-
-RUN rm -rf /tmp/deps
 
 # ─────────────────────────────────────────────────────────────────────────────
 # source-thumbv8m: clippy + build for all pico2w (thumbv8m) variants
