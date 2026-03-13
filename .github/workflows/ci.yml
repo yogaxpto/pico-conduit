@@ -21,9 +21,9 @@ env:
   CARGO_TARGET_DIR: /cache/target
 
 jobs:
-  # ── Build CI Docker image (pre-compiled deps + project source) ──────
-  build:
-    name: Build CI Image
+  # ── Build CI Docker image: pico2w variant (thumbv8m + host deps) ────
+  build-pico2w:
+    name: Build CI Image (pico2w)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -55,14 +55,57 @@ jobs:
         with:
           context: .
           file: .github/Dockerfile.ci
+          target: final-pico2w
           push: true
           # Always push a SHA-pinned tag (used by downstream jobs via outputs.image).
           # Push `latest` only on master so concurrent PR builds don't race on it.
           tags: |
             ghcr.io/${{ github.repository }}/ci:${{ github.sha }}
             ${{ github.ref == 'refs/heads/master' && format('ghcr.io/{0}/ci:latest', github.repository) || '' }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=pico2w
+          cache-to: type=gha,mode=max,scope=pico2w
+          secrets: |
+            actions_cache_url=${{ env.ACTIONS_CACHE_URL }}
+            actions_runtime_token=${{ env.ACTIONS_RUNTIME_TOKEN }}
+
+  # ── Build CI Docker image: pico1w variant (thumbv6m deps only) ──────
+  # Runs in parallel with build-pico2w on a separate runner, halving the
+  # wall time spent in the image-build phase.
+  build-pico1w:
+    name: Build CI Image (pico1w)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ghcr.io/${{ github.repository }}/ci:pico1w-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Expose GitHub Actions cache env
+        uses: actions/github-script@v8
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env['ACTIONS_CACHE_URL'] || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env['ACTIONS_RUNTIME_TOKEN'] || '');
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: .github/Dockerfile.ci
+          target: final-pico1w
+          push: true
+          tags: ghcr.io/${{ github.repository }}/ci:pico1w-${{ github.sha }}
+          cache-from: type=gha,scope=pico1w
+          cache-to: type=gha,mode=max,scope=pico1w
           secrets: |
             actions_cache_url=${{ env.ACTIONS_CACHE_URL }}
             actions_runtime_token=${{ env.ACTIONS_RUNTIME_TOKEN }}
@@ -72,7 +115,7 @@ jobs:
   # pre-compiled binaries (no source compilation at test time).
   host-build:
     name: Build host test binaries
-    needs: [build]
+    needs: [build-pico2w]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -96,17 +139,20 @@ jobs:
           file: .github/Dockerfile.ci.host
           push: true
           tags: ghcr.io/${{ github.repository }}/ci:host-${{ github.sha }}
-          build-args: DEPS_IMAGE=${{ needs.build.outputs.image }}
+          build-args: DEPS_IMAGE=${{ needs.build-pico2w.outputs.image }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   # ── Fast checks (run in parallel after build) ─────────────────────
   lint:
     name: Lint (${{ matrix.board }})
-    needs: [build]
+    needs: [build-pico2w, build-pico1w]
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image }}
+      image: >-
+        ${{ matrix.pico1w == true
+            && needs.build-pico1w.outputs.image
+            || needs.build-pico2w.outputs.image }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -117,24 +163,31 @@ jobs:
           - board: pico2w
             target: thumbv8m.main-none-eabihf
             cargo-features: ""
+            pico1w: false
           - board: pico1w
             target: thumbv6m-none-eabi
             cargo-features: "--no-default-features --features embedded,pico1w,transport-tcp"
+            pico1w: true
           - board: pico2w-ws
             target: thumbv8m.main-none-eabihf
             cargo-features: "--no-default-features --features embedded,pico2w,transport-websocket"
+            pico1w: false
           - board: pico1w-ws
             target: thumbv6m-none-eabi
             cargo-features: "--no-default-features --features embedded,pico1w,transport-websocket"
+            pico1w: true
           - board: pico2w-mqtt
             target: thumbv8m.main-none-eabihf
             cargo-features: "--no-default-features --features embedded,pico2w,transport-mqtt"
+            pico1w: false
           - board: pico1w-mqtt
             target: thumbv6m-none-eabi
             cargo-features: "--no-default-features --features embedded,pico1w,transport-mqtt"
+            pico1w: true
           - board: pico2w-postcard
             target: thumbv8m.main-none-eabihf
             cargo-features: "--no-default-features --features embedded,pico2w,transport-tcp,codec-postcard"
+            pico1w: false
     defaults:
       run:
         working-directory: ${{ github.workspace }}
@@ -209,10 +262,13 @@ jobs:
   # a dedicated runner.
   build-firmware:
     name: Build Firmware (${{ matrix.board }})
-    needs: [build, lint, host-test]
+    needs: [build-pico2w, build-pico1w, lint, host-test]
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image }}
+      image: >-
+        ${{ matrix.pico1w == true
+            && needs.build-pico1w.outputs.image
+            || needs.build-pico2w.outputs.image }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -225,36 +281,43 @@ jobs:
             cargo-features: ""
             flash-max: 4186112
             flash-desc: "4 MB"
+            pico1w: false
           - board: pico1w
             target: thumbv6m-none-eabi
             cargo-features: "--no-default-features --features embedded,pico1w,transport-tcp"
             flash-max: 2088960
             flash-desc: "2 MB"
+            pico1w: true
           - board: pico2w-ws
             target: thumbv8m.main-none-eabihf
             cargo-features: "--no-default-features --features embedded,pico2w,transport-websocket"
             flash-max: 4186112
             flash-desc: "4 MB"
+            pico1w: false
           - board: pico1w-ws
             target: thumbv6m-none-eabi
             cargo-features: "--no-default-features --features embedded,pico1w,transport-websocket"
             flash-max: 2088960
             flash-desc: "2 MB"
+            pico1w: true
           - board: pico2w-mqtt
             target: thumbv8m.main-none-eabihf
             cargo-features: "--no-default-features --features embedded,pico2w,transport-mqtt"
             flash-max: 4186112
             flash-desc: "4 MB"
+            pico1w: false
           - board: pico2w-postcard
             target: thumbv8m.main-none-eabihf
             cargo-features: "--no-default-features --features embedded,pico2w,transport-tcp,codec-postcard"
             flash-max: 4186112
             flash-desc: "4 MB"
+            pico1w: false
           - board: pico1w-mqtt
             target: thumbv6m-none-eabi
             cargo-features: "--no-default-features --features embedded,pico1w,transport-mqtt"
             flash-max: 2088960
             flash-desc: "2 MB"
+            pico1w: true
     defaults:
       run:
         working-directory: ${{ github.workspace }}
@@ -302,11 +365,11 @@ jobs:
   # elf2uf2-rs is installed in the deps Docker image (base-tools stage).
   release:
     name: Release UF2
-    needs: [build, build-firmware]
+    needs: [build-pico2w, build-firmware]
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image }}
+      image: ${{ needs.build-pico2w.outputs.image }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

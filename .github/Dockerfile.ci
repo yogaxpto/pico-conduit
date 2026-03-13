@@ -7,8 +7,9 @@
 #   base-tools (system packages + binary tools)
 #    └─ base (toolchain install)
 #        └─ deps-stub (shared dummy-source setup)
-#            ├─ deps-thumbv8m ─┐
-#            ├─ deps-thumbv6m ─┤─ final  (deps only — no source baked in)
+#            ├─ deps-thumbv8m ─┬─ final-pico2w (→ ci:sha)        ←── CI use
+#            │                 │    └─ final (local all-in-one)
+#            ├─ deps-thumbv6m ──── final-pico1w (→ ci:pico1w-sha) ←── CI use
 #            └─ deps-host     ─┘
 #
 # Source compilation happens in separate CI jobs:
@@ -171,23 +172,22 @@ RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
     sccache --show-stats 2>/dev/null || true
 
 # ─────────────────────────────────────────────────────────────────────────────
-# final: merge all three deps subtrees into one image
+# final-pico2w: thumbv8m deps + host deps merged.
 #
-# /cache/target layout after merge:
-#   thumbv8m.main-none-eabihf/  ← from deps-thumbv8m
-#   thumbv6m-none-eabi/         ← COPY --from=deps-thumbv6m  (no overlap)
-#   {host-triple}/              ← copied via RUN  (no overlap with embedded dirs)
+# Pushed as ci:$sha.  Used by:
+#   lint (pico2w variants), build-firmware (pico2w variants),
+#   host-build (DEPS_IMAGE base), release (elf2uf2-rs).
+#
+# /cache/target layout:
+#   thumbv8m.main-none-eabihf/  ← from deps-thumbv8m (base of this stage)
+#   {host-triple}/              ← merged from deps-host
 #
 # Source is NOT baked in — downstream CI jobs check out code themselves:
 #   lint / build-firmware  →  actions/checkout + cargo clippy / cargo build
 #   host-build             →  Dockerfile.ci.host (separate build, adds /src)
 #   host-test              →  uses ci:host-$sha image produced by host-build
 # ─────────────────────────────────────────────────────────────────────────────
-FROM deps-thumbv8m AS final
-
-# Merge pico1w deps — thumbv6m subtree doesn't exist in deps-thumbv8m
-COPY --from=deps-thumbv6m /cache/target/thumbv6m-none-eabi \
-                           /cache/target/thumbv6m-none-eabi
+FROM deps-thumbv8m AS final-pico2w
 
 # Merge host deps — copy everything that isn't an embedded target dir
 COPY --from=deps-host /cache/target /tmp/cache-host
@@ -195,5 +195,27 @@ RUN find /tmp/cache-host -mindepth 1 -maxdepth 1 \
       ! -name 'thumbv8m*' ! -name 'thumbv6m*' \
       -exec cp -r {} /cache/target/ \; \
     && rm -rf /tmp/cache-host
+
+# ─────────────────────────────────────────────────────────────────────────────
+# final-pico1w: thumbv6m deps only.
+#
+# Pushed as ci:pico1w-$sha.  Used by:
+#   lint (pico1w variants), build-firmware (pico1w variants).
+# No host deps needed: pico1w jobs never run host-triple steps.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM deps-thumbv6m AS final-pico1w
+# No merge needed — thumbv6m deps are standalone.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# final: local all-in-one (all three subtrees merged).
+#
+# CI never builds this target; it uses --target final-pico2w / final-pico1w.
+# Kept so `docker build .github/Dockerfile.ci` still works locally.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM final-pico2w AS final
+
+# Merge pico1w deps — thumbv6m subtree doesn't exist in final-pico2w
+COPY --from=final-pico1w /cache/target/thumbv6m-none-eabi \
+                          /cache/target/thumbv6m-none-eabi
 
 # /etc/cargo-env (host triple) is intentionally kept in the final image.
