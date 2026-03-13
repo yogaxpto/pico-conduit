@@ -140,8 +140,8 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository }}/ci:host-${{ github.sha }}
           build-args: DEPS_IMAGE=${{ needs.build-pico2w.outputs.image }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=host
+          cache-to: type=gha,mode=max,scope=host
 
   # ── Fast checks (run in parallel after build) ─────────────────────
   lint:
@@ -188,6 +188,10 @@ jobs:
             target: thumbv8m.main-none-eabihf
             cargo-features: "--no-default-features --features embedded,pico2w,transport-tcp,codec-postcard"
             pico1w: false
+          - board: pico1w-postcard
+            target: thumbv6m-none-eabi
+            cargo-features: "--no-default-features --features embedded,pico1w,transport-tcp,codec-postcard"
+            pico1w: true
     defaults:
       run:
         working-directory: ${{ github.workspace }}
@@ -212,6 +216,12 @@ jobs:
         run: |
           out=$(cargo check --no-default-features \
             --features embedded,pico2w,transport-tcp,transport-websocket 2>&1) || true
+          echo "$out" | grep -q "mutually exclusive"
+          out=$(cargo check --no-default-features \
+            --features embedded,pico2w,transport-tcp,transport-mqtt 2>&1) || true
+          echo "$out" | grep -q "mutually exclusive"
+          out=$(cargo check --no-default-features \
+            --features embedded,pico2w,transport-websocket,transport-mqtt 2>&1) || true
           echo "$out" | grep -q "mutually exclusive"
 
       - name: Clippy (embedded firmware)
@@ -318,6 +328,12 @@ jobs:
           - board: pico1w-mqtt
             target: thumbv6m-none-eabi
             cargo-features: "--no-default-features --features embedded,pico1w,transport-mqtt"
+            flash-max: 2088960
+            flash-desc: "2 MB"
+            pico1w: true
+          - board: pico1w-postcard
+            target: thumbv6m-none-eabi
+            cargo-features: "--no-default-features --features embedded,pico1w,transport-tcp,codec-postcard"
             flash-max: 2088960
             flash-desc: "2 MB"
             pico1w: true

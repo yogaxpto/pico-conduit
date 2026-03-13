@@ -148,6 +148,9 @@ RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
       --target-dir /cache/target 2>&1 || true \
  && cargo build --release --target thumbv6m-none-eabi \
       --no-default-features --features embedded,pico1w,transport-mqtt --lib \
+      --target-dir /cache/target 2>&1 || true \
+ && cargo build --release --target thumbv6m-none-eabi \
+      --no-default-features --features embedded,pico1w,transport-tcp,codec-postcard --lib \
       --target-dir /cache/target 2>&1 || true; \
     sccache --show-stats 2>/dev/null || true
 
