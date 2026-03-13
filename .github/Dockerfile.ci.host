@@ -1,0 +1,32 @@
+# CI host test binary compilation.
+#
+# Builds on top of the deps image produced by the main Dockerfile.ci build job,
+# compiling host test binaries so the host-test CI job only needs to run them
+# (no source compilation at test time).
+#
+# Required build arg:
+#   DEPS_IMAGE — the ci:$sha image tag output by the build job
+#
+# Usage:
+#   docker build \
+#     --build-arg DEPS_IMAGE=ghcr.io/.../ci:$sha \
+#     --file .github/Dockerfile.ci.host \
+#     -t ghcr.io/.../ci:host-$sha .
+ARG DEPS_IMAGE
+FROM ${DEPS_IMAGE}
+
+# Disable sccache — deps are already cached in /cache/target from the base image.
+ENV RUSTC_WRAPPER=
+
+WORKDIR /src
+COPY . .
+
+RUN . /etc/cargo-env \
+    && cargo test --no-run --test host --no-default-features \
+       --target "$HOST_TRIPLE" --target-dir /cache/target \
+    && cargo test --no-run --test host --no-default-features --features pico2w \
+       --target "$HOST_TRIPLE" --target-dir /cache/target \
+    && cargo test --no-run --test host --no-default-features --features pico1w \
+       --target "$HOST_TRIPLE" --target-dir /cache/target \
+    && cargo test --no-run -p pico-socketeer-client \
+       --target "$HOST_TRIPLE" --target-dir /cache/target

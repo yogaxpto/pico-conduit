@@ -7,9 +7,14 @@
 #   base-tools (system packages + binary tools)
 #    └─ base (toolchain install)
 #        └─ deps-stub (shared dummy-source setup)
-#            ├─ deps-thumbv8m ──────────────────── source-thumbv8m ─┐
-#            ├─ deps-thumbv6m ──────────────────── source-thumbv6m ─┤─ final
-#            └─ deps-host     ──────────────────── source-host ─────┘
+#            ├─ deps-thumbv8m ─┐
+#            ├─ deps-thumbv6m ─┤─ final  (deps only — no source baked in)
+#            └─ deps-host     ─┘
+#
+# Source compilation happens in separate CI jobs:
+#   host-build  → Dockerfile.ci.host (host test binaries)
+#   lint        → cargo clippy (7× parallel matrix)
+#   build-firmware → cargo build --release (7× parallel matrix)
 #
 # deps-stub holds the COPY + stub-source RUN that is identical across all three
 # deps-* stages. BuildKit caches it once; all three deps-* stages branch from it
@@ -160,87 +165,26 @@ RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
     && sccache --show-stats
 
 # ─────────────────────────────────────────────────────────────────────────────
-# source-thumbv8m: build for all pico2w (thumbv8m) variants
-# (clippy runs in the parallel lint CI job matrix — no need to duplicate it here)
-# ─────────────────────────────────────────────────────────────────────────────
-FROM deps-thumbv8m AS source-thumbv8m
-
-# Disable sccache for source compilation — deps are already cached in
-# /cache/target and sccache credentials may not be available here.
-ENV RUSTC_WRAPPER=
-
-WORKDIR /src
-COPY . .
-
-RUN set -e; \
-    for ARGS in \
-      "--release --target thumbv8m.main-none-eabihf --no-default-features --features embedded,pico2w,transport-websocket" \
-      "--release --target thumbv8m.main-none-eabihf --no-default-features --features embedded,pico2w,transport-mqtt" \
-      "--release --target thumbv8m.main-none-eabihf --no-default-features --features embedded,pico2w,transport-tcp,codec-postcard" \
-      "--release --target thumbv8m.main-none-eabihf" \
-    ; do \
-      cargo build $ARGS --target-dir /cache/target; \
-    done
-
-# ─────────────────────────────────────────────────────────────────────────────
-# source-thumbv6m: build for all pico1w (thumbv6m) variants
-# (clippy runs in the parallel lint CI job matrix — no need to duplicate it here)
-# ─────────────────────────────────────────────────────────────────────────────
-FROM deps-thumbv6m AS source-thumbv6m
-
-ENV RUSTC_WRAPPER=
-
-WORKDIR /src
-COPY . .
-
-RUN set -e; \
-    for ARGS in \
-      "--release --target thumbv6m-none-eabi --no-default-features --features embedded,pico1w,transport-websocket" \
-      "--release --target thumbv6m-none-eabi --no-default-features --features embedded,pico1w,transport-mqtt" \
-      "--release --target thumbv6m-none-eabi --no-default-features --features embedded,pico1w,transport-tcp" \
-    ; do \
-      cargo build $ARGS --target-dir /cache/target; \
-    done
-
-# ─────────────────────────────────────────────────────────────────────────────
-# source-host: host tests + client crate
-# ─────────────────────────────────────────────────────────────────────────────
-FROM deps-host AS source-host
-
-ENV RUSTC_WRAPPER=
-
-WORKDIR /src
-COPY . .
-
-RUN . /etc/cargo-env \
-    && cargo test --no-run --test host --no-default-features \
-       --target "$HOST_TRIPLE" --target-dir /cache/target \
-    && cargo test --no-run --test host --no-default-features --features pico2w \
-       --target "$HOST_TRIPLE" --target-dir /cache/target \
-    && cargo test --no-run --test host --no-default-features --features pico1w \
-       --target "$HOST_TRIPLE" --target-dir /cache/target \
-    && cargo test --no-run -p pico-socketeer-client \
-       --target "$HOST_TRIPLE" --target-dir /cache/target
-
-# ─────────────────────────────────────────────────────────────────────────────
-# final: merge all three architecture subtrees into one image
+# final: merge all three deps subtrees into one image
 #
 # /cache/target layout after merge:
-#   thumbv8m.main-none-eabihf/  ← from source-thumbv8m (base of this stage)
-#   thumbv6m-none-eabi/         ← COPY --from=source-thumbv6m  (no overlap)
+#   thumbv8m.main-none-eabihf/  ← from deps-thumbv8m
+#   thumbv6m-none-eabi/         ← COPY --from=deps-thumbv6m  (no overlap)
 #   {host-triple}/              ← copied via RUN  (no overlap with embedded dirs)
 #
-# Downstream CI jobs run with WORKDIR=/src and no actions/checkout —
-# cargo fingerprints match because the absolute path is /src.
+# Source is NOT baked in — downstream CI jobs check out code themselves:
+#   lint / build-firmware  →  actions/checkout + cargo clippy / cargo build
+#   host-build             →  Dockerfile.ci.host (separate build, adds /src)
+#   host-test              →  uses ci:host-$sha image produced by host-build
 # ─────────────────────────────────────────────────────────────────────────────
-FROM source-thumbv8m AS final
+FROM deps-thumbv8m AS final
 
-# Merge pico1w artifacts — thumbv6m subtree doesn't exist in source-thumbv8m
-COPY --from=source-thumbv6m /cache/target/thumbv6m-none-eabi \
-                             /cache/target/thumbv6m-none-eabi
+# Merge pico1w deps — thumbv6m subtree doesn't exist in deps-thumbv8m
+COPY --from=deps-thumbv6m /cache/target/thumbv6m-none-eabi \
+                           /cache/target/thumbv6m-none-eabi
 
-# Merge host artifacts — copy everything that isn't an embedded target dir
-COPY --from=source-host /cache/target /tmp/cache-host
+# Merge host deps — copy everything that isn't an embedded target dir
+COPY --from=deps-host /cache/target /tmp/cache-host
 RUN find /tmp/cache-host -mindepth 1 -maxdepth 1 \
       ! -name 'thumbv8m*' ! -name 'thumbv6m*' \
       -exec cp -r {} /cache/target/ \; \

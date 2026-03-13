@@ -67,6 +67,39 @@ jobs:
             actions_cache_url=${{ env.ACTIONS_CACHE_URL }}
             actions_runtime_token=${{ env.ACTIONS_RUNTIME_TOKEN }}
 
+  # ── Host test binary compilation (fans out from build) ────────────
+  # Compiles host test binaries on a dedicated runner so host-test only runs
+  # pre-compiled binaries (no source compilation at test time).
+  host-build:
+    name: Build host test binaries
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ghcr.io/${{ github.repository }}/ci:host-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: .github/Dockerfile.ci.host
+          push: true
+          tags: ghcr.io/${{ github.repository }}/ci:host-${{ github.sha }}
+          build-args: DEPS_IMAGE=${{ needs.build.outputs.image }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # ── Fast checks (run in parallel after build) ─────────────────────
   lint:
     name: Lint (${{ matrix.board }})
@@ -104,8 +137,10 @@ jobs:
             cargo-features: "--no-default-features --features embedded,pico2w,transport-tcp,codec-postcard"
     defaults:
       run:
-        working-directory: /src
+        working-directory: ${{ github.workspace }}
     steps:
+      - uses: actions/checkout@v6
+
       - name: Resolve host target
         id: host
         run: |
@@ -132,10 +167,10 @@ jobs:
 
   host-test:
     name: Test (${{ matrix.board }})
-    needs: [build]
+    needs: [host-build]
     runs-on: ubuntu-latest
     container:
-      image: ${{ needs.build.outputs.image }}
+      image: ${{ needs.host-build.outputs.image }}
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -169,8 +204,9 @@ jobs:
         run: cargo test -p pico-socketeer-client --target ${{ steps.host.outputs.triple }}
 
   # ── Firmware build (gates on lint + tests passing) ─────────────────
-  # With pre-compiled source in the Docker image, cargo build here is a
-  # near-instant fingerprint check — the real work happened in the image.
+  # Source is not pre-compiled in the deps image; cargo build --release here
+  # does the full LTO compilation. Seven matrix items run in parallel, each on
+  # a dedicated runner.
   build-firmware:
     name: Build Firmware (${{ matrix.board }})
     needs: [build, lint, host-test]
@@ -221,8 +257,10 @@ jobs:
             flash-desc: "2 MB"
     defaults:
       run:
-        working-directory: /src
+        working-directory: ${{ github.workspace }}
     steps:
+      - uses: actions/checkout@v6
+
       - name: Build firmware (release)
         run: cargo build --release --target ${{ matrix.target }} ${{ matrix.cargo-features }}
 
@@ -231,7 +269,8 @@ jobs:
           FLASH_MAX=${{ matrix.flash-max }}
 
           FIRMWARE=${CARGO_TARGET_DIR}/${{ matrix.target }}/release/pico-socketeer
-          read TEXT DATA <<< "$(size "$FIRMWARE" | awk 'NR==2 {print $1, $2}')"
+          TEXT=$(size "$FIRMWARE" | awk 'NR==2 {print $1}')
+          DATA=$(size "$FIRMWARE" | awk 'NR==2 {print $2}')
           USED=$(( TEXT + DATA ))
           REMAINING=$(( FLASH_MAX - USED ))
 
@@ -255,12 +294,12 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: firmware-elf-${{ matrix.board }}
-          path: /cache/target/${{ matrix.target }}/release/pico-socketeer
+          path: ${{ env.CARGO_TARGET_DIR }}/${{ matrix.target }}/release/pico-socketeer
           retention-days: 5
 
   # ── Release (only on version tags) ─────────────────────────────────
-  # ELFs are pre-built in the CI image; elf2uf2-rs is installed in the base
-  # stage, so no tool installation or artifact download is needed here.
+  # ELFs are produced by build-firmware (uploaded as GHA artifacts).
+  # elf2uf2-rs is installed in the deps Docker image (base-tools stage).
   release:
     name: Release UF2
     needs: [build, build-firmware]
@@ -275,17 +314,21 @@ jobs:
       contents: write
       packages: read
     steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware-elf-pico2w
+          path: elf-pico2w
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware-elf-pico1w
+          path: elf-pico1w
+
       - name: Convert pico2w ELF to UF2
-        run: |
-          elf2uf2-rs \
-            /cache/target/thumbv8m.main-none-eabihf/release/pico-socketeer \
-            pico-socketeer-pico2w.uf2
+        run: elf2uf2-rs elf-pico2w/pico-socketeer pico-socketeer-pico2w.uf2
 
       - name: Convert pico1w ELF to UF2
-        run: |
-          elf2uf2-rs \
-            /cache/target/thumbv6m-none-eabi/release/pico-socketeer \
-            pico-socketeer-pico1w.uf2
+        run: elf2uf2-rs elf-pico1w/pico-socketeer pico-socketeer-pico1w.uf2
 
       - name: Upload UF2s to GitHub Release
         uses: softprops/action-gh-release@v2
