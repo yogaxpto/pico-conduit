@@ -257,7 +257,7 @@ jobs:
         with:
           name: firmware-elf-pico2w
 
-      - uses: cargo-bins/cargo-binstall@v1.17.6
+      - uses: cargo-bins/cargo-binstall@v1.17.7
       - name: Install elf2uf2-rs
         run: cargo binstall elf2uf2-rs --no-confirm --locked
 
