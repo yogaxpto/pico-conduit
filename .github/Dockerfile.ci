@@ -135,7 +135,8 @@ FROM deps-stub AS deps-thumbv6m
 
 RUN --mount=type=secret,id=actions_cache_url,env=ACTIONS_CACHE_URL \
     --mount=type=secret,id=actions_runtime_token,env=ACTIONS_RUNTIME_TOKEN \
-    cargo build --release --target thumbv6m-none-eabi \
+    mkdir -p /cache/target/thumbv6m-none-eabi \
+ && cargo build --release --target thumbv6m-none-eabi \
       --no-default-features --features embedded,pico1w,transport-tcp --lib \
       --target-dir /cache/target 2>&1 || true \
  && cargo build --release --target thumbv6m-none-eabi \
