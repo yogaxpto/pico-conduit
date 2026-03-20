@@ -467,12 +467,12 @@ jobs:
       contents: write
       packages: read
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: firmware-elf-pico2w
           path: elf-pico2w
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: firmware-elf-pico1w
           path: elf-pico1w
