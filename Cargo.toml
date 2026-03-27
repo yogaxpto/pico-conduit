@@ -101,7 +101,7 @@ embassy-futures = "0.1.1"
 rust-mqtt = { version = "0.4.1", default-features = false, features = ["v5", "bump", "defmt"], optional = true }
 
 # CYW43439 Wi-Fi driver (Pico 2W onboard chip)
-cyw43     = { version = "0.6.0", features = ["defmt", "firmware-logs"] }
+cyw43     = { version = "0.7.0", features = ["defmt", "firmware-logs"] }
 cyw43-pio = { version = "0.9.0", features = ["defmt"] }
 
 # Panic handler — RTT-backed (replaces panic-halt)

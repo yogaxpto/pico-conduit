@@ -12,10 +12,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "aligned"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee4508988c62edf04abd8d92897fca0c2995d907ce1dfeaf369dac3716a40685"
+dependencies = [
+ "as-slice",
+]
+
+[[package]]
 name = "arrayvec"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
+
+[[package]]
+name = "as-slice"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "516b6b4f0e40d50dcda9365d53964ec74560ad4284da2e7fc97122cd83174516"
+dependencies = [
+ "stable_deref_trait",
+]
 
 [[package]]
 name = "ascii-canvas"
@@ -91,15 +109,15 @@ dependencies = [
 
 [[package]]
 name = "bt-hci"
-version = "0.6.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb938a3b4c5cc6c2409275bad789c0346a0495fa071a0acc5d72b9bd3175a2f7"
+checksum = "40f2166cc54c410ddc0d0dafb3cf8dd536bcbae6bddfcc12c020c5ee4de518de"
 dependencies = [
  "btuuid",
  "defmt 1.0.1",
  "embassy-sync 0.7.2",
- "embedded-io 0.6.1",
- "embedded-io-async 0.6.1",
+ "embedded-io 0.7.1",
+ "embedded-io-async 0.7.0",
  "futures-intrusive",
  "heapless 0.9.2",
 ]
@@ -228,19 +246,38 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bff28275bda1b427b4cc6fb23c22505fef8ace0ccfadc9bffe3fdd6120ff1513"
 dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+ "embassy-futures",
+ "embassy-net-driver-channel 0.3.2",
+ "embassy-sync 0.7.2",
+ "embassy-time",
+ "embedded-hal 1.0.0",
+ "futures",
+ "heapless 0.8.0",
+ "num_enum 0.5.11",
+]
+
+[[package]]
+name = "cyw43"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "033e856bf6f38c96fee3e3f398cceff0ca2c2fae5db255bcd23495216c7047da"
+dependencies = [
+ "aligned",
  "bt-hci",
  "cortex-m",
  "cortex-m-rt",
  "defmt 1.0.1",
  "embassy-futures",
- "embassy-net-driver-channel",
- "embassy-sync 0.7.2",
+ "embassy-net-driver-channel 0.4.0",
+ "embassy-sync 0.8.0",
  "embassy-time",
  "embedded-hal 1.0.0",
- "embedded-io-async 0.6.1",
+ "embedded-hal-async",
+ "embedded-io-async 0.7.0",
  "futures",
- "heapless 0.8.0",
- "num_enum 0.5.11",
+ "heapless 0.9.2",
 ]
 
 [[package]]
@@ -249,7 +286,7 @@ version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1504988186aca75ebe6f0b8450c309baf342bc73b988844983ad6ba97291efe"
 dependencies = [
- "cyw43",
+ "cyw43 0.6.0",
  "defmt 1.0.1",
  "embassy-rp",
  "fixed",
@@ -478,6 +515,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "embassy-net-driver-channel"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a07d2eb9f05a6fc876500949856ea1be40773d866d8cb99384f72d0ae4568c16"
+dependencies = [
+ "embassy-futures",
+ "embassy-net-driver",
+ "embassy-sync 0.8.0",
+]
+
+[[package]]
 name = "embassy-rp"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -647,9 +695,6 @@ name = "embedded-io"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
-dependencies = [
- "defmt 0.3.100",
-]
 
 [[package]]
 name = "embedded-io"
@@ -666,7 +711,6 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ff09972d4073aa8c299395be75161d582e7629cd663171d62af73c8d50dba3f"
 dependencies = [
- "defmt 0.3.100",
  "embedded-io 0.6.1",
 ]
 
@@ -886,7 +930,6 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
 dependencies = [
- "defmt 0.3.100",
  "hash32",
  "serde",
  "stable_deref_trait",
@@ -1208,7 +1251,7 @@ name = "pico-socketeer"
 version = "0.1.0"
 dependencies = [
  "cortex-m-rt",
- "cyw43",
+ "cyw43 0.7.0",
  "cyw43-pio",
  "defmt 1.0.1",
  "defmt-rtt",
