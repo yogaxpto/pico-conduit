@@ -60,8 +60,11 @@ use pico_socketeer::router::{DeviceState, dispatch, validate_route};
 use pico_socketeer::transport::{Transport, TransportError};
 
 // ── CYW43 firmware blobs ──────────────────────────────────────────────────────
-const CYW43_FW: &[u8] = include_bytes!("../cyw43-firmware/43439A0.bin");
+const CYW43_FW: &cyw43::Aligned<cyw43::A4, [u8]> =
+    cyw43::aligned_bytes!("../cyw43-firmware/43439A0.bin");
 const CYW43_CLM: &[u8] = include_bytes!("../cyw43-firmware/43439A0_clm.bin");
+const CYW43_NVRAM: &cyw43::Aligned<cyw43::A4, [u8]> =
+    cyw43::aligned_bytes!("../cyw43-firmware/nvram_rp2040.bin");
 
 // ── AP network constants ──────────────────────────────────────────────────────
 /// Gateway / DHCP server address for the AP captive-portal network.
@@ -214,14 +217,14 @@ static CONTROL_MUTEX: Mutex<CriticalSectionRawMutex, Option<ControlWrapper>> = M
 // ── Interrupt bindings ────────────────────────────────────────────────────────
 embassy_rp::bind_interrupts!(struct Irqs {
     PIO0_IRQ_0 => embassy_rp::pio::InterruptHandler<embassy_rp::peripherals::PIO0>;
+    DMA_IRQ_0 => embassy_rp::dma::InterruptHandler<embassy_rp::peripherals::DMA_CH0>;
 });
 
 // ── Task type aliases ─────────────────────────────────────────────────────────
-type CywSpi =
-    cyw43_pio::PioSpi<'static, embassy_rp::peripherals::PIO0, 0, embassy_rp::peripherals::DMA_CH0>;
+type CywSpi = cyw43_pio::PioSpi<'static, embassy_rp::peripherals::PIO0, 0>;
 /// GPIO23 doubles as the CYW43 `WL_ON` line.  We first sample it as `Flex` (factory-reset check),
 /// then reconfigure as output and pass to the cyw43 driver.
-type CywRunner = cyw43::Runner<'static, Flex<'static>, CywSpi>;
+type CywRunner = cyw43::Runner<'static, cyw43::SpiBus<Flex<'static>, CywSpi>>;
 type CredFlash = Flash<'static, embassy_rp::peripherals::FLASH, Blocking, FLASH_SIZE>;
 
 // ── Background tasks ──────────────────────────────────────────────────────────
@@ -431,11 +434,11 @@ pub async fn start(spawner: Spawner, p: embassy_rp::Peripherals) {
         cs,
         p.PIN_24,
         p.PIN_29,
-        p.DMA_CH0,
+        embassy_rp::dma::Channel::new(p.DMA_CH0, Irqs),
     );
 
     let state = CYW43_STATE.init(cyw43::State::new());
-    let (net_device, mut control, runner) = cyw43::new(state, pin23, spi, CYW43_FW).await;
+    let (net_device, mut control, runner) = cyw43::new(state, pin23, spi, CYW43_FW, CYW43_NVRAM).await;
 
     spawner.must_spawn(cyw43_task(runner));
     control.init(CYW43_CLM).await;
