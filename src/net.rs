@@ -438,7 +438,8 @@ pub async fn start(spawner: Spawner, p: embassy_rp::Peripherals) {
     );
 
     let state = CYW43_STATE.init(cyw43::State::new());
-    let (net_device, mut control, runner) = cyw43::new(state, pin23, spi, CYW43_FW, CYW43_NVRAM).await;
+    let (net_device, mut control, runner) =
+        cyw43::new(state, pin23, spi, CYW43_FW, CYW43_NVRAM).await;
 
     spawner.must_spawn(cyw43_task(runner));
     control.init(CYW43_CLM).await;
