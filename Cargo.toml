@@ -73,7 +73,7 @@ postcard = { version = "1", default-features = false, optional = true }
 
 [target.'cfg(target_os = "none")'.dependencies]
 # Embassy async runtime and RP HAL (chip variant selected by pico2w/pico1w feature)
-embassy-rp = { version = "0.9.0", features = [
+embassy-rp = { version = "0.10.0", features = [
     "defmt",
     "unstable-pac",
     "time-driver",
