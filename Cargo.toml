@@ -114,7 +114,7 @@ defmt-rtt = "1.0.0"
 static_cell = "2.1"
 
 # Wear-levelled flash key-value storage (credentials)
-sequential-storage = "7.1.0"
+sequential-storage = "7.2.0"
 
 # `#[embassy_executor::main]` expands to `#[cortex_m_rt::entry]` — must be a direct dep
 cortex-m-rt = "0.7"
