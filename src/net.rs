@@ -1004,7 +1004,8 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
             user_name: None,
             password: None,
         };
-        let mqtt_client_id = MqttString::try_from(client_id_str.as_str()).unwrap();
+        let mqtt_client_id = MqttString::try_from(client_id_str.as_str())
+                .expect("client_id exceeds MqttString limit");
 
         // connect() takes socket by value — client owns the connection afterward
         match client
@@ -1030,7 +1031,10 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
 
         // Subscribe to command topic
         let cmd_topic = unsafe {
-            TopicName::new_unchecked(MqttString::from_slice(cmd_topic_str.as_str()).unwrap())
+            TopicName::new_unchecked(
+                MqttString::from_slice(cmd_topic_str.as_str())
+                    .expect("cmd topic exceeds MqttString limit"),
+            )
         };
         let sub_opts = SubscriptionOptions {
             retain_handling: RetainHandling::SendIfNotSubscribedBefore,
@@ -1102,7 +1106,8 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
                     {
                         let resp_topic = unsafe {
                             TopicName::new_unchecked(
-                                MqttString::from_slice(resp_topic_str.as_str()).unwrap(),
+                                MqttString::from_slice(resp_topic_str.as_str())
+                                    .expect("resp topic exceeds MqttString limit"),
                             )
                         };
                         let pub_opts = PublicationOptions {
