@@ -1005,7 +1005,7 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
             password: None,
         };
         let mqtt_client_id = MqttString::try_from(client_id_str.as_str())
-                .expect("client_id exceeds MqttString limit");
+            .expect("client_id exceeds MqttString limit");
 
         // connect() takes socket by value — client owns the connection afterward
         match client
