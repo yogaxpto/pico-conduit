@@ -95,9 +95,15 @@ On error:
 | `read`     | `pin: u8`                    | `{"value": 0\|1}` |
 | `write`    | `pin: u8`, `value: 0\|1`    | _(none)_ |
 | `set_mode` | `pin: u8`, `mode: "input"\|"output"`, `pull?: "up"\|"down"\|"none"` | _(none)_ |
+| `subscribe` | `pin: u8`, `trigger?: "edge_rising"\|"edge_falling"\|"edge_both"`, `interval_ms?: u32` | _(none)_ |
+| `unsubscribe` | `pin: u8` | _(none)_ |
 
 **`set_mode` pull configuration:** The optional `pull` field configures the internal pull
 resistor. When omitted it defaults to `"none"`.
+
+**GPIO subscriptions:** If `trigger` is provided the subscription is edge-triggered (fires on
+hardware event). Otherwise the pin level is polled at `interval_ms` (default: 100 ms). Push
+notifications use the request `id` as the notification ID.
 
 **Pin restrictions:** GPIO29 is reserved (CYW43 SPI DIO); use returns `invalid_pin`.
 
@@ -150,8 +156,13 @@ resistor. When omitted it defaults to `"none"`.
 | Action | Additional fields | Response `data` |
 |--------|-------------------|-----------------|
 | `read` | `adc_channel: 0\|1\|2\|3` | `{"raw": u16, "voltage": f32}` for channels 0-2; `{"celsius": f32}` for channel 3 (onboard temperature) |
+| `subscribe` | `adc_channel: 0\|1\|2\|3`, `interval_ms?: u32` | _(none)_ |
+| `unsubscribe` | `adc_channel: 0\|1\|2\|3` | _(none)_ |
 
 Channel mapping: `0` = GPIO26, `1` = GPIO27, `2` = GPIO28, `3` = onboard temperature sensor.
+
+**ADC subscriptions:** The channel is polled at `interval_ms` (default: 100 ms). Push
+notifications carry the same data format as `adc/read` responses.
 
 ---
 
@@ -245,6 +256,19 @@ Response:
 {"id":"1","ok":true,"data":null,"error":null}
 ```
 *(TCP connection closes; device reboots into USB bootloader)*
+
+---
+
+## Subscriptions
+
+GPIO and ADC interfaces support push-based subscriptions via `subscribe` and `unsubscribe`
+actions.
+
+- **Maximum concurrent subscriptions:** 8. Exceeding this returns `subscription_limit`.
+- **Duplicate detection:** subscribing to an already-subscribed pin/channel returns
+  `already_subscribed`.
+- **Unsubscribe:** removing a non-existent subscription returns `not_subscribed`.
+- **Lifetime:** all subscriptions are cleared when the client disconnects.
 
 ---
 
