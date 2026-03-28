@@ -27,7 +27,7 @@
 //!
 //! # Max Message Size
 //!
-//! [`MAX_MSG_LEN`] = 512 bytes including the newline.
+//! [`MAX_MSG_LEN`] = 1024 bytes including the newline.
 
 use serde::{Deserialize, Serialize};
 
