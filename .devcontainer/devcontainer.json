@@ -26,7 +26,8 @@
 				"Gruntfuggly.todo-tree",
 				"hbenl.vscode-test-explorer",
 				"swellaby.vscode-rust-test-adapter",
-				"github.vscode-github-actions"
+				"github.vscode-github-actions",
+				"vadimcn.vscode-lldb"
 			],
 			"settings": {
 				"rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf",
