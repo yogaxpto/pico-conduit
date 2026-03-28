@@ -94,7 +94,10 @@ On error:
 |------------|------------------------------|-----------------|
 | `read`     | `pin: u8`                    | `{"value": 0\|1}` |
 | `write`    | `pin: u8`, `value: 0\|1`    | _(none)_ |
-| `set_mode` | `pin: u8`, `mode: "input"\|"output"\|"input_pullup"\|"input_pulldown"` | _(none)_ |
+| `set_mode` | `pin: u8`, `mode: "input"\|"output"`, `pull?: "up"\|"down"\|"none"` | _(none)_ |
+
+**`set_mode` pull configuration:** The optional `pull` field configures the internal pull
+resistor. When omitted it defaults to `"none"`.
 
 **Pin restrictions:** GPIO29 is reserved (CYW43 SPI DIO); use returns `invalid_pin`.
 
