@@ -22,6 +22,9 @@ env:
 
 jobs:
   # ── Build CI Docker image: pico2w variant (thumbv8m + host deps) ────
+  # The image is tagged by a content hash of all dependency-relevant files.
+  # If the hash-tagged image already exists in GHCR the build is skipped,
+  # saving ~3-5 min on source-only pushes.
   build-pico2w:
     name: Build CI Image (pico2w)
     runs-on: ubuntu-latest
@@ -29,9 +32,22 @@ jobs:
       contents: read
       packages: write
     outputs:
-      image: ghcr.io/${{ github.repository }}/ci:${{ github.sha }}
+      image: ${{ steps.check.outputs.image }}
     steps:
       - uses: actions/checkout@v6
+
+      - name: Compute deps hash
+        id: deps-hash
+        run: |
+          HASH=$(cat \
+            Cargo.toml Cargo.lock build.rs \
+            client/Cargo.toml macros/Cargo.toml \
+            rust-toolchain.toml \
+            .cargo/config.toml \
+            memory-pico2w.x memory-pico1w.x \
+            .github/Dockerfile.ci \
+            | sha256sum | cut -c1-16)
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v4
 
@@ -41,10 +57,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check if deps image exists
+        id: check
+        run: |
+          TAG="deps-pico2w-${{ steps.deps-hash.outputs.hash }}"
+          IMAGE="ghcr.io/${{ github.repository }}/ci:${TAG}"
+          if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
       # Expose GHA cache service URL/token so sccache inside BuildKit can
       # read/write the Actions cache.  actions/cache injects these env vars
       # automatically; buildx needs them forwarded as build secrets.
       - name: Expose GitHub Actions cache env
+        if: steps.check.outputs.exists == 'false'
         uses: actions/github-script@v8
         with:
           script: |
@@ -52,15 +81,14 @@ jobs:
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env['ACTIONS_RUNTIME_TOKEN'] || '');
 
       - uses: docker/build-push-action@v7
+        if: steps.check.outputs.exists == 'false'
         with:
           context: .
           file: .github/Dockerfile.ci
           target: final-pico2w
           push: true
-          # Always push a SHA-pinned tag (used by downstream jobs via outputs.image).
-          # Push `latest` only on master so concurrent PR builds don't race on it.
           tags: |
-            ghcr.io/${{ github.repository }}/ci:${{ github.sha }}
+            ${{ steps.check.outputs.image }}
             ${{ github.ref == 'refs/heads/master' && format('ghcr.io/{0}/ci:latest', github.repository) || '' }}
           cache-from: type=gha,scope=pico2w
           cache-to: type=gha,mode=max,scope=pico2w
@@ -68,9 +96,19 @@ jobs:
             actions_cache_url=${{ env.ACTIONS_CACHE_URL }}
             actions_runtime_token=${{ env.ACTIONS_RUNTIME_TOKEN }}
 
+      - name: Tag as latest (skip path)
+        if: |
+          steps.check.outputs.exists == 'true'
+          && github.ref == 'refs/heads/master'
+        run: |
+          docker buildx imagetools create \
+            ${{ steps.check.outputs.image }} \
+            --tag ghcr.io/${{ github.repository }}/ci:latest
+
   # ── Build CI Docker image: pico1w variant (thumbv6m deps only) ──────
   # Runs in parallel with build-pico2w on a separate runner, halving the
-  # wall time spent in the image-build phase.
+  # wall time spent in the image-build phase.  Skipped when the content-
+  # hash-tagged image already exists in GHCR.
   build-pico1w:
     name: Build CI Image (pico1w)
     runs-on: ubuntu-latest
@@ -78,9 +116,22 @@ jobs:
       contents: read
       packages: write
     outputs:
-      image: ghcr.io/${{ github.repository }}/ci:pico1w-${{ github.sha }}
+      image: ${{ steps.check.outputs.image }}
     steps:
       - uses: actions/checkout@v6
+
+      - name: Compute deps hash
+        id: deps-hash
+        run: |
+          HASH=$(cat \
+            Cargo.toml Cargo.lock build.rs \
+            client/Cargo.toml macros/Cargo.toml \
+            rust-toolchain.toml \
+            .cargo/config.toml \
+            memory-pico2w.x memory-pico1w.x \
+            .github/Dockerfile.ci \
+            | sha256sum | cut -c1-16)
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-buildx-action@v4
 
@@ -90,7 +141,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check if deps image exists
+        id: check
+        run: |
+          TAG="deps-pico1w-${{ steps.deps-hash.outputs.hash }}"
+          IMAGE="ghcr.io/${{ github.repository }}/ci:${TAG}"
+          if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
       - name: Expose GitHub Actions cache env
+        if: steps.check.outputs.exists == 'false'
         uses: actions/github-script@v8
         with:
           script: |
@@ -98,12 +162,13 @@ jobs:
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env['ACTIONS_RUNTIME_TOKEN'] || '');
 
       - uses: docker/build-push-action@v7
+        if: steps.check.outputs.exists == 'false'
         with:
           context: .
           file: .github/Dockerfile.ci
           target: final-pico1w
           push: true
-          tags: ghcr.io/${{ github.repository }}/ci:pico1w-${{ github.sha }}
+          tags: ${{ steps.check.outputs.image }}
           cache-from: type=gha,scope=pico1w
           cache-to: type=gha,mode=max,scope=pico1w
           secrets: |
