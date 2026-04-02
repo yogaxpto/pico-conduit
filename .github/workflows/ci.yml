@@ -19,6 +19,10 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
   CARGO_TARGET_DIR: /cache/target
+  # Injected at runtime by the Actions runner; declared here to satisfy
+  # IDE linters that validate env context references.
+  ACTIONS_CACHE_URL: ""
+  ACTIONS_RUNTIME_TOKEN: ""
 
 jobs:
   # ── Build CI Docker image: pico2w variant (thumbv8m + host deps) ────
