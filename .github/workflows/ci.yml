@@ -313,7 +313,7 @@ jobs:
 
       - name: Clippy (client crate)
         if: matrix.board == 'pico2w'
-        run: cargo clippy -p pico-socketeer-client --target ${{ steps.host.outputs.triple }} -- -D warnings
+        run: cargo clippy -p pico-conduit-client --target ${{ steps.host.outputs.triple }} -- -D warnings
 
   # ── Fast checks: pico1w variants ─────────────────────────────────
   # Starts as soon as build-pico1w is ready — does not wait for build-pico2w.
@@ -381,7 +381,7 @@ jobs:
         run: cargo test --test host --no-default-features --features pico2w --target ${{ steps.host.outputs.triple }}
 
       - name: Client crate tests
-        run: cargo test -p pico-socketeer-client --target ${{ steps.host.outputs.triple }}
+        run: cargo test -p pico-conduit-client --target ${{ steps.host.outputs.triple }}
 
   # ── Host tests: pico1w board ──────────────────────────────────────
   host-test-pico1w:
@@ -490,7 +490,7 @@ jobs:
         run: |
           FLASH_MAX=${{ matrix.flash-max }}
 
-          FIRMWARE=${CARGO_TARGET_DIR}/${{ matrix.target }}/release/pico-socketeer
+          FIRMWARE=${CARGO_TARGET_DIR}/${{ matrix.target }}/release/pico-conduit
           TEXT=$(size "$FIRMWARE" | awk 'NR==2 {print $1}')
           DATA=$(size "$FIRMWARE" | awk 'NR==2 {print $2}')
           USED=$(( TEXT + DATA ))
@@ -516,7 +516,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: firmware-elf-${{ matrix.board }}
-          path: ${{ env.CARGO_TARGET_DIR }}/${{ matrix.target }}/release/pico-socketeer
+          path: ${{ env.CARGO_TARGET_DIR }}/${{ matrix.target }}/release/pico-conduit
           retention-days: 5
 
   # ── Release (only on version tags) ─────────────────────────────────
@@ -547,14 +547,14 @@ jobs:
           path: elf-pico1w
 
       - name: Convert pico2w ELF to UF2
-        run: elf2uf2-rs elf-pico2w/pico-socketeer pico-socketeer-pico2w.uf2
+        run: elf2uf2-rs elf-pico2w/pico-conduit pico-conduit-pico2w.uf2
 
       - name: Convert pico1w ELF to UF2
-        run: elf2uf2-rs elf-pico1w/pico-socketeer pico-socketeer-pico1w.uf2
+        run: elf2uf2-rs elf-pico1w/pico-conduit pico-conduit-pico1w.uf2
 
       - name: Upload UF2s to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            pico-socketeer-pico2w.uf2
-            pico-socketeer-pico1w.uf2
+            pico-conduit-pico2w.uf2
+            pico-conduit-pico1w.uf2

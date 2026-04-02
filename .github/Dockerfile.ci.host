@@ -15,7 +15,7 @@
 # host-pico2w compiles:
 #   • board-agnostic host tests (--no-default-features)
 #   • pico2w board host tests  (--features pico2w)
-#   • client crate tests       (-p pico-socketeer-client)
+#   • client crate tests       (-p pico-conduit-client)
 #
 # host-pico1w compiles:
 #   • pico1w board host tests  (--features pico1w)
@@ -42,7 +42,7 @@ RUN . /etc/cargo-env \
        --target "$HOST_TRIPLE" --target-dir /cache/target \
     && cargo test --no-run --test host --no-default-features --features pico2w \
        --target "$HOST_TRIPLE" --target-dir /cache/target \
-    && cargo test --no-run -p pico-socketeer-client \
+    && cargo test --no-run -p pico-conduit-client \
        --target "$HOST_TRIPLE" --target-dir /cache/target
 
 # ─────────────────────────────────────────────────────────────────────────────
