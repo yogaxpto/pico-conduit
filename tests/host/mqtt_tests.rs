@@ -1,5 +1,5 @@
-use pico_socketeer::mqtt::{backoff_secs, client_id, cmd_topic, resp_topic};
-use pico_socketeer::provisioning::portal::make_ap_ssid;
+use pico_conduit::mqtt::{backoff_secs, client_id, cmd_topic, resp_topic};
+use pico_conduit::provisioning::portal::make_ap_ssid;
 
 // ----- Topic string construction -----
 

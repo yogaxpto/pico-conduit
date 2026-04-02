@@ -1,8 +1,8 @@
-use pico_socketeer::interfaces::pwm::{
+use pico_conduit::interfaces::pwm::{
     MAX_PWM_CHANNEL, handle_disable, handle_enable, handle_set_duty, handle_set_freq,
     validate_channel,
 };
-use pico_socketeer::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE};
+use pico_conduit::protocol::{Command, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE};
 
 fn make_pwm_cmd<'a>(
     id: &'a str,

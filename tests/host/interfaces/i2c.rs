@@ -1,7 +1,7 @@
-use pico_socketeer::interfaces::i2c::{
+use pico_conduit::interfaces::i2c::{
     handle_configure, handle_read, handle_write, handle_write_read,
 };
-use pico_socketeer::protocol::{
+use pico_conduit::protocol::{
     Command, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_VALUE_OUT_OF_RANGE, ResponseData,
 };
 
@@ -227,7 +227,7 @@ fn i2c_read_caps_at_payload_limit() {
         Some(ResponseData::Bytes { bytes }) => {
             assert_eq!(
                 bytes.0.len(),
-                pico_socketeer::protocol::MAX_PAYLOAD_LEN,
+                pico_conduit::protocol::MAX_PAYLOAD_LEN,
                 "read should be capped at MAX_PAYLOAD_LEN bytes"
             );
         }

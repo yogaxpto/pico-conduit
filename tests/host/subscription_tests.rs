@@ -4,11 +4,11 @@
 //! rejection, and subscription clearing on disconnect (DeviceState reset).
 
 use crate::fixtures::make_cmd;
-use pico_socketeer::protocol::{
+use pico_conduit::protocol::{
     AdcChannel, ERROR_ALREADY_SUBSCRIBED, ERROR_MISSING_FIELD, ERROR_NOT_SUBSCRIBED,
     ERROR_SUBSCRIPTION_LIMIT, EdgeTrigger, MAX_SUBSCRIPTIONS,
 };
-use pico_socketeer::router::{DeviceState, dispatch, validate_route};
+use pico_conduit::router::{DeviceState, dispatch, validate_route};
 
 // ── route validation ──────────────────────────────────────────────────────────
 
@@ -104,7 +104,7 @@ fn gpio_subscribe_edge_rising_adds_to_registry() {
     assert_eq!(state.subscriptions.len(), 1);
 
     // Verify the stored target has the correct trigger
-    use pico_socketeer::protocol::SubscriptionTarget;
+    use pico_conduit::protocol::SubscriptionTarget;
     match &state.subscriptions[0].target {
         SubscriptionTarget::GpioEdge {
             pin: 7,

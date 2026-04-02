@@ -1,11 +1,11 @@
-//! Typed TCP client for the pico-socketeer firmware.
+//! Typed TCP client for the pico-conduit firmware.
 //!
 //! # Example
 //!
 //! ```no_run
-//! use pico_socketeer_client::PicoSocketeer;
+//! use pico_conduit_client::PicoConduit;
 //!
-//! let mut pico = PicoSocketeer::connect("192.168.1.100:4242").unwrap();
+//! let mut pico = PicoConduit::connect("192.168.1.100:4242").unwrap();
 //! pico.gpio_write(15, 1).unwrap();
 //! let (raw, voltage) = pico.adc_read(0).unwrap();
 //! println!("ADC raw={raw}, voltage={voltage:.3}V");
@@ -86,17 +86,17 @@ fn next_id() -> String {
     NEXT_ID.fetch_add(1, Ordering::Relaxed).to_string()
 }
 
-/// Typed TCP client for the pico-socketeer firmware.
+/// Typed TCP client for the pico-conduit firmware.
 ///
 /// Holds a `BufReader` over a cloned `TcpStream` for reading, and the original
 /// stream for writing, so both halves can coexist.
-pub struct PicoSocketeer {
+pub struct PicoConduit {
     reader: BufReader<TcpStream>,
     writer: TcpStream,
 }
 
-impl PicoSocketeer {
-    /// Connect to a pico-socketeer device.
+impl PicoConduit {
+    /// Connect to a pico-conduit device.
     ///
     /// `addr` is any value implementing `ToSocketAddrs`, e.g. `"192.168.1.100:4242"`.
     pub fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self> {

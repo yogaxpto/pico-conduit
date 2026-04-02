@@ -1,7 +1,7 @@
 use embedded_hal_mock::eh1::digital::{Mock as PinMock, State, Transaction};
-use pico_socketeer::interfaces::gpio::{handle_read, handle_set_mode, handle_write};
-use pico_socketeer::interfaces::is_pin_available;
-use pico_socketeer::protocol::{
+use pico_conduit::interfaces::gpio::{handle_read, handle_set_mode, handle_write};
+use pico_conduit::interfaces::is_pin_available;
+use pico_conduit::protocol::{
     Command, ERROR_INVALID_PIN, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE, ResponseData,
 };
 

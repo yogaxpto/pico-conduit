@@ -3,7 +3,7 @@ members = [".", "client", "macros"]
 resolver = "2"
 
 [package]
-name = "pico-socketeer"
+name = "pico-conduit"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
@@ -25,7 +25,7 @@ transport-mqtt = ["dep:rust-mqtt"]
 codec-postcard = ["dep:postcard"]
 
 [[bin]]
-name = "pico-socketeer"
+name = "pico-conduit"
 path = "src/main.rs"
 required-features = ["embedded"]
 
@@ -131,7 +131,7 @@ heapless = { version = "0.9.2", features = ["serde"] }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 # Proc-macro test helpers (e.g. #[require_env("PICO_IP")])
-pico-socketeer-macros = { path = "macros" }
+pico-conduit-macros = { path = "macros" }
 sha1 = "0.10"
 
 [[test]]

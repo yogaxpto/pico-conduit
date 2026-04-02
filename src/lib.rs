@@ -1,4 +1,4 @@
-//! pico-socketeer library — all testable logic modules.
+//! pico-conduit library — all testable logic modules.
 //!
 //! This lib crate is `no_std`-compatible and compiles for both the embedded target
 //! (`thumbv8m.main-none-eabihf` or `thumbv6m-none-eabi`) and the host (for Tier 1 + Tier 2

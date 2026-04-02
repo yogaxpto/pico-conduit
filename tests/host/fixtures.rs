@@ -1,4 +1,4 @@
-use pico_socketeer::protocol::Command;
+use pico_conduit::protocol::Command;
 
 /// Build a minimal [`Command`] with all fields `None` except `version`, `id`,
 /// `interface`, and `action`. Shared across all host test modules so that

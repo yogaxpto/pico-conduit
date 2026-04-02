@@ -1,9 +1,9 @@
 use crate::fixtures::make_cmd;
-use pico_socketeer::protocol::{
+use pico_conduit::protocol::{
     AdcChannel, ERROR_INVALID_PIN, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_UNKNOWN_ACTION,
     ERROR_UNKNOWN_INTERFACE, ERROR_VALUE_OUT_OF_RANGE,
 };
-use pico_socketeer::router::{DeviceState, dispatch, validate_route};
+use pico_conduit::router::{DeviceState, dispatch, validate_route};
 
 #[test]
 fn gpio_read_is_valid_route() {
@@ -418,7 +418,7 @@ fn config_get_excludes_mqtt_fields_without_feature() {
     let resp = dispatch(&cmd, ("config", "get"), &mut state);
     assert!(resp.ok);
     let mut buf = [0u8; 512];
-    let n = pico_socketeer::protocol::serialize_response(&resp, &mut buf).unwrap();
+    let n = pico_conduit::protocol::serialize_response(&resp, &mut buf).unwrap();
     let s = core::str::from_utf8(&buf[..n]).unwrap();
     assert!(
         !s.contains("mqtt_host"),

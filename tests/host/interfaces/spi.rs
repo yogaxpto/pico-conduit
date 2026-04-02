@@ -1,5 +1,5 @@
-use pico_socketeer::interfaces::spi::{handle_configure, handle_transfer, handle_write};
-use pico_socketeer::protocol::{
+use pico_conduit::interfaces::spi::{handle_configure, handle_transfer, handle_write};
+use pico_conduit::protocol::{
     Command, ERROR_MISSING_FIELD, ERROR_NOT_CONFIGURED, ERROR_VALUE_OUT_OF_RANGE, ResponseData,
 };
 

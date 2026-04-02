@@ -4,13 +4,13 @@
 //!
 //! # Setup
 //!
-//! 1. Flash the firmware: `cargo build --release && probe-rs run --chip RP235x target/thumbv8m.main-none-eabihf/release/pico-socketeer`
+//! 1. Flash the firmware: `cargo build --release && probe-rs run --chip RP235x target/thumbv8m.main-none-eabihf/release/pico-conduit`
 //! 2. Wait for the LED to show solid ON (connected)
 //! 3. Run: `PICO_IP=192.168.1.x cargo test --test integration`
 //!
 //! Tests auto-skip when `PICO_IP` is not set. No `--ignored` flag needed.
 
-use pico_socketeer_macros::require_env;
+use pico_conduit_macros::require_env;
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;

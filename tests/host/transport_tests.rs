@@ -1,6 +1,6 @@
-use pico_socketeer::protocol::{ERROR_MALFORMED_JSON, ERROR_MSG_TOO_LARGE, MAX_MSG_LEN};
-use pico_socketeer::router::{DeviceState, dispatch, validate_route};
-use pico_socketeer::transport::{Transport, TransportError};
+use pico_conduit::protocol::{ERROR_MALFORMED_JSON, ERROR_MSG_TOO_LARGE, MAX_MSG_LEN};
+use pico_conduit::router::{DeviceState, dispatch, validate_route};
+use pico_conduit::transport::{Transport, TransportError};
 
 // ----- TransportError enum tests -----
 
@@ -102,7 +102,7 @@ async fn handle_client_generic<T: Transport>(
     config_ssid: &heapless::String<32>,
     config_ip: &heapless::String<16>,
 ) {
-    use pico_socketeer::protocol::{Response, parse_command, serialize_response};
+    use pico_conduit::protocol::{Response, parse_command, serialize_response};
 
     let mut frame_buf = [0u8; MAX_MSG_LEN];
     let mut resp_buf = [0u8; MAX_MSG_LEN];

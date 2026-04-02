@@ -3,11 +3,11 @@
 //! The batch interface dispatches multiple inner commands in a single round-trip and
 //! returns a `{"responses":[...]}` array in the response `data` field.
 
-use pico_socketeer::protocol::{
+use pico_conduit::protocol::{
     ERROR_BATCH_EMPTY, ERROR_BATCH_TOO_LARGE, MAX_BATCH_SIZE, parse_command,
     serialize_batch_response,
 };
-use pico_socketeer::router::{DeviceState, dispatch_batch, validate_route};
+use pico_conduit::router::{DeviceState, dispatch_batch, validate_route};
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ fn batch_unknown_action_returns_error() {
     let err = result.unwrap_err();
     assert_eq!(
         err.error,
-        Some(pico_socketeer::protocol::ERROR_UNKNOWN_ACTION)
+        Some(pico_conduit::protocol::ERROR_UNKNOWN_ACTION)
     );
 }
 

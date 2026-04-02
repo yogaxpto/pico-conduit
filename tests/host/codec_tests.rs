@@ -3,8 +3,8 @@
 //! `JsonCodec` tests run unconditionally.
 //! `PostcardCodec` tests are compiled only when `codec-postcard` feature is active.
 
-use pico_socketeer::codec::{Codec, JsonCodec};
-use pico_socketeer::protocol::{ERROR_MALFORMED_JSON, ERROR_MISSING_VERSION, Response};
+use pico_conduit::codec::{Codec, JsonCodec};
+use pico_conduit::protocol::{ERROR_MALFORMED_JSON, ERROR_MISSING_VERSION, Response};
 
 // ── JsonCodec ─────────────────────────────────────────────────────────────────
 
@@ -44,7 +44,7 @@ fn json_codec_serializes_ok_response() {
 
 #[test]
 fn json_codec_serializes_error_response() {
-    use pico_socketeer::protocol::ERROR_INVALID_PIN;
+    use pico_conduit::protocol::ERROR_INVALID_PIN;
     let resp = Response::error("e1", ERROR_INVALID_PIN);
     let mut buf = [0u8; 128];
     let n = JsonCodec::serialize_response(&resp, &mut buf).unwrap();
@@ -57,8 +57,8 @@ fn json_codec_serializes_error_response() {
 
 #[cfg(feature = "codec-postcard")]
 mod postcard_tests {
-    use pico_socketeer::codec::{Codec, PostcardCodec, encode_command_postcard};
-    use pico_socketeer::protocol::{
+    use pico_conduit::codec::{Codec, PostcardCodec, encode_command_postcard};
+    use pico_conduit::protocol::{
         AdcChannel, Command, ERROR_MALFORMED_JSON, Response, ResponseData,
     };
 
@@ -239,7 +239,7 @@ mod postcard_tests {
 
     #[test]
     fn postcard_codec_serializes_error_response() {
-        use pico_socketeer::protocol::ERROR_INVALID_PIN;
+        use pico_conduit::protocol::ERROR_INVALID_PIN;
         let resp = Response::error("e1", ERROR_INVALID_PIN);
         let mut buf = [0u8; 64];
         let n = PostcardCodec::serialize_response(&resp, &mut buf).unwrap();

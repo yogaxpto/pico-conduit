@@ -1,9 +1,9 @@
 [package]
-name    = "pico-socketeer-macros"
+name    = "pico-conduit-macros"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "Proc-macro helpers for pico-socketeer tests"
+description = "Proc-macro helpers for pico-conduit tests"
 
 [lib]
 proc-macro = true

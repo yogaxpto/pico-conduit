@@ -1,6 +1,6 @@
 use crate::fixtures::make_cmd;
-use pico_socketeer::interfaces::{decode_bytes, require_positive};
-use pico_socketeer::protocol::{
+use pico_conduit::interfaces::{decode_bytes, require_positive};
+use pico_conduit::protocol::{
     ERROR_INVALID_ENCODING, ERROR_MISSING_FIELD, ERROR_VALUE_OUT_OF_RANGE,
 };
 

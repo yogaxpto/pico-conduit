@@ -1,4 +1,4 @@
-//! pico-socketeer firmware entry point.
+//! pico-conduit firmware entry point.
 //!
 //! All testable logic lives in the library crate (`src/lib.rs` and its modules).
 //! The embedded networking glue lives in `src/net.rs`.
@@ -25,7 +25,7 @@ const BOOT_CLOCK_HZ: u32 = 48_000_000;
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    info!("pico-socketeer starting");
+    info!("pico-conduit starting");
 
     // Boot at BOOT_CLOCK_HZ (XOSC direct, PLL bypassed) per OBJECTIVE Phase 5c.
     // `system_freq` returns Result; unwrap panics on invalid frequency (48 MHz is valid).

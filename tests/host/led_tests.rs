@@ -1,4 +1,4 @@
-use pico_socketeer::led::{LedPattern, LedState, SOS_TIMING};
+use pico_conduit::led::{LedPattern, LedState, SOS_TIMING};
 
 /// LedState must have exactly 9 variants — one for each row in the LED State Reference table.
 /// This test prevents silent omissions when the table is updated.

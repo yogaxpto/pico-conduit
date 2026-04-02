@@ -1,6 +1,6 @@
 use crate::fixtures::make_cmd;
-use pico_socketeer::protocol::{ERROR_UNKNOWN_ACTION, ERROR_UNKNOWN_INTERFACE, ResponseData};
-use pico_socketeer::router::{DeviceState, dispatch, validate_route};
+use pico_conduit::protocol::{ERROR_UNKNOWN_ACTION, ERROR_UNKNOWN_INTERFACE, ResponseData};
+use pico_conduit::router::{DeviceState, dispatch, validate_route};
 
 // ── validate_route ────────────────────────────────────────────────────────────
 

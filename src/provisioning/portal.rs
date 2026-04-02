@@ -191,7 +191,7 @@ pub fn decode_url_encoded<'a>(
 /// # Example
 ///
 /// ```rust
-/// # use pico_socketeer::provisioning::portal::make_ap_ssid;
+/// # use pico_conduit::provisioning::portal::make_ap_ssid;
 /// let ssid = make_ap_ssid([0xAA, 0xBB, 0xCC, 0xDD, 0xA3, 0xF2]);
 /// assert_eq!(ssid.as_str(), "pico-setup-A3F2");
 /// ```

@@ -1,6 +1,6 @@
-use pico_socketeer::board::{TCP_PORT, WS_PORT};
-use pico_socketeer::protocol::{ERROR_MSG_TOO_LARGE, ERROR_WEBSOCKET_HANDSHAKE, MAX_MSG_LEN};
-use pico_socketeer::ws::{
+use pico_conduit::board::{TCP_PORT, WS_PORT};
+use pico_conduit::protocol::{ERROR_MSG_TOO_LARGE, ERROR_WEBSOCKET_HANDSHAKE, MAX_MSG_LEN};
+use pico_conduit::ws::{
     OPCODE_PONG, compute_accept_key, encode_pong_frame, encode_text_frame,
     encode_text_frame_header, parse_frame_header, unmask,
 };

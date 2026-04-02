@@ -1,4 +1,4 @@
-use pico_socketeer::provisioning::storage::{
+use pico_conduit::provisioning::storage::{
     Credentials, erase_credentials, load_credentials, save_credentials,
 };
 

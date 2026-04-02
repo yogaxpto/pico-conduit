@@ -1,4 +1,4 @@
-use pico_socketeer::provisioning::portal::{
+use pico_conduit::provisioning::portal::{
     Method, ParseError, decode_url_encoded, make_ap_ssid, parse_connect_form, parse_request_line,
 };
 

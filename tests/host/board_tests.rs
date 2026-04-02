@@ -1,5 +1,5 @@
-use pico_socketeer::board::{TCP_NODELAY, TCP_RX_BUF_SIZE, TCP_TX_BUF_SIZE};
-use pico_socketeer::protocol::MAX_MSG_LEN;
+use pico_conduit::board::{TCP_NODELAY, TCP_RX_BUF_SIZE, TCP_TX_BUF_SIZE};
+use pico_conduit::protocol::MAX_MSG_LEN;
 
 #[test]
 fn tcp_nodelay_is_enabled() {
@@ -43,7 +43,7 @@ fn tcp_buf_sizes_are_power_of_two() {
 mod pico2w {
     use fixed::FixedU32;
     use fixed::types::extra::U8;
-    use pico_socketeer::board::{
+    use pico_conduit::board::{
         CRED_FLASH_OFFSET, CRED_REGION_SIZE, CYW43_CLOCK_DIVIDER, FLASH_SIZE, validate_chip_part,
     };
 
@@ -105,7 +105,7 @@ mod pico2w {
 mod pico1w {
     use fixed::FixedU32;
     use fixed::types::extra::U8;
-    use pico_socketeer::board::{
+    use pico_conduit::board::{
         CRED_FLASH_OFFSET, CRED_REGION_SIZE, CYW43_CLOCK_DIVIDER, FLASH_SIZE, validate_chip_part,
     };
 

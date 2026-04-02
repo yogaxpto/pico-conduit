@@ -1,7 +1,7 @@
-use pico_socketeer::interfaces::adc::{
+use pico_conduit::interfaces::adc::{
     handle_read_with_raw, raw_to_celsius, raw_to_voltage, validate_read,
 };
-use pico_socketeer::protocol::{AdcChannel, Command, ERROR_MISSING_FIELD, ResponseData};
+use pico_conduit::protocol::{AdcChannel, Command, ERROR_MISSING_FIELD, ResponseData};
 
 fn make_adc_cmd<'a>(id: &'a str, channel: Option<AdcChannel>) -> Command<'a> {
     Command {

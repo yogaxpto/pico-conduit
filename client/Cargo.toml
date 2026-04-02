@@ -1,9 +1,9 @@
 [package]
-name    = "pico-socketeer-client"
+name    = "pico-conduit-client"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "Reference client library for pico-socketeer firmware"
+description = "Reference client library for pico-conduit firmware"
 
 [dependencies]
 serde      = { version = "1.0", features = ["derive"] }

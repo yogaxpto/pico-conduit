@@ -1,4 +1,4 @@
-use pico_socketeer::base64::{decode, encode};
+use pico_conduit::base64::{decode, encode};
 
 // ----- Encode -----
 

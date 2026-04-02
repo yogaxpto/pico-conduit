@@ -42,22 +42,22 @@ use embedded_storage::nor_flash::{NorFlash, ReadNorFlash};
 use static_cell::StaticCell;
 
 #[cfg(feature = "transport-tcp")]
-use pico_socketeer::board::TCP_PORT;
-use pico_socketeer::board::{CRED_FLASH_OFFSET, FLASH_SIZE};
-use pico_socketeer::led::{LED_SIGNAL, LedPattern, LedState};
+use pico_conduit::board::TCP_PORT;
+use pico_conduit::board::{CRED_FLASH_OFFSET, FLASH_SIZE};
+use pico_conduit::led::{LED_SIGNAL, LedPattern, LedState};
 #[cfg(feature = "transport-tcp")]
-use pico_socketeer::protocol::FrameReader;
-use pico_socketeer::protocol::MAX_MSG_LEN;
+use pico_conduit::protocol::FrameReader;
+use pico_conduit::protocol::MAX_MSG_LEN;
 #[cfg(any(feature = "transport-tcp", feature = "transport-websocket"))]
-use pico_socketeer::protocol::{parse_command, serialize_response};
-use pico_socketeer::provisioning::portal::{
+use pico_conduit::protocol::{parse_command, serialize_response};
+use pico_conduit::provisioning::portal::{
     Method, decode_url_encoded, make_ap_ssid, parse_connect_form, parse_request_line,
 };
-use pico_socketeer::provisioning::storage::Credentials;
+use pico_conduit::provisioning::storage::Credentials;
 #[cfg(any(feature = "transport-tcp", feature = "transport-websocket"))]
-use pico_socketeer::router::{DeviceState, dispatch, validate_route};
+use pico_conduit::router::{DeviceState, dispatch, validate_route};
 #[cfg(any(feature = "transport-tcp", feature = "transport-websocket"))]
-use pico_socketeer::transport::{Transport, TransportError};
+use pico_conduit::transport::{Transport, TransportError};
 
 // ── CYW43 firmware blobs ──────────────────────────────────────────────────────
 const CYW43_FW: &cyw43::Aligned<cyw43::A4, [u8]> =
@@ -168,11 +168,11 @@ fn validate_platform() {
     let chip_id = embassy_rp::pac::SYSINFO.chip_id().read();
     let part = chip_id.part();
 
-    if let Err(msg) = pico_socketeer::board::validate_chip_part(part) {
+    if let Err(msg) = pico_conduit::board::validate_chip_part(part) {
         defmt::panic!(
             "{}: expected PART={=u16:#x}, got PART={=u16:#x}",
             msg,
-            pico_socketeer::board::EXPECTED_CHIP_PART,
+            pico_conduit::board::EXPECTED_CHIP_PART,
             part
         );
     }
@@ -429,7 +429,7 @@ pub async fn start(spawner: Spawner, p: embassy_rp::Peripherals) {
         pio.sm0,
         // CYW43_CLOCK_DIVIDER raises the SPI clock from ~37.5 MHz (default) to ~50 MHz,
         // reducing per-packet SPI transfer time by ~25%. See src/board.rs for derivation.
-        pico_socketeer::board::CYW43_CLOCK_DIVIDER,
+        pico_conduit::board::CYW43_CLOCK_DIVIDER,
         pio.irq0,
         cs,
         p.PIN_24,
@@ -545,7 +545,7 @@ async fn sta_mode(spawner: Spawner, net_device: cyw43::NetDriver<'static>, creds
     {
         defmt::info!(
             "Listening on WebSocket port {}",
-            pico_socketeer::board::WS_PORT
+            pico_conduit::board::WS_PORT
         );
         ws_server(stack, creds.ssid, config_ip).await;
     }
@@ -563,10 +563,10 @@ async fn tcp_server(
     config_ssid: heapless::String<32>,
     config_ip: heapless::String<16>,
 ) {
-    let mut rx_buf = [0u8; pico_socketeer::board::TCP_RX_BUF_SIZE];
-    let mut tx_buf = [0u8; pico_socketeer::board::TCP_TX_BUF_SIZE];
+    let mut rx_buf = [0u8; pico_conduit::board::TCP_RX_BUF_SIZE];
+    let mut tx_buf = [0u8; pico_conduit::board::TCP_TX_BUF_SIZE];
     let mut socket = TcpSocket::new(stack, &mut rx_buf, &mut tx_buf);
-    socket.set_nagle_enabled(!pico_socketeer::board::TCP_NODELAY);
+    socket.set_nagle_enabled(!pico_conduit::board::TCP_NODELAY);
 
     let mut reconnect_attempt: u8 = 0;
     let mut total_offline_secs: u16 = 0;
@@ -668,7 +668,7 @@ impl WsTransport<'_, '_> {
 #[cfg(feature = "transport-websocket")]
 impl Transport for WsTransport<'_, '_> {
     async fn read_frame<'c>(&mut self, buf: &'c mut [u8]) -> Result<&'c [u8], TransportError> {
-        use pico_socketeer::ws::{
+        use pico_conduit::ws::{
             OPCODE_CLOSE, OPCODE_PING, OPCODE_TEXT, encode_pong_frame, unmask,
         };
 
@@ -697,14 +697,14 @@ impl Transport for WsTransport<'_, '_> {
                 // 64-bit lengths not supported
                 self.socket.abort();
                 return Err(TransportError::Protocol(
-                    pico_socketeer::protocol::ERROR_MSG_TOO_LARGE,
+                    pico_conduit::protocol::ERROR_MSG_TOO_LARGE,
                 ));
             };
 
             if payload_len > MAX_MSG_LEN {
                 self.socket.abort();
                 return Err(TransportError::Protocol(
-                    pico_socketeer::protocol::ERROR_MSG_TOO_LARGE,
+                    pico_conduit::protocol::ERROR_MSG_TOO_LARGE,
                 ));
             }
 
@@ -747,7 +747,7 @@ impl Transport for WsTransport<'_, '_> {
 
     async fn write_frame(&mut self, data: &[u8]) -> Result<(), TransportError> {
         let mut hdr = [0u8; 4];
-        let hdr_len = pico_socketeer::ws::encode_text_frame_header(data.len(), &mut hdr)
+        let hdr_len = pico_conduit::ws::encode_text_frame_header(data.len(), &mut hdr)
             .map_err(TransportError::Protocol)?;
 
         if self.socket.write_all(&hdr[..hdr_len]).await.is_err() {
@@ -768,7 +768,7 @@ impl Transport for WsTransport<'_, '_> {
 /// `Sec-WebSocket-Accept`, and sends the HTTP 101 response.
 #[cfg(feature = "transport-websocket")]
 async fn ws_handshake(socket: &mut TcpSocket<'_>) -> Result<(), TransportError> {
-    use pico_socketeer::protocol::ERROR_WEBSOCKET_HANDSHAKE;
+    use pico_conduit::protocol::ERROR_WEBSOCKET_HANDSHAKE;
 
     let mut hdr_buf = [0u8; 512];
     let n = read_http_headers(socket, &mut hdr_buf).await;
@@ -792,7 +792,7 @@ async fn ws_handshake(socket: &mut TcpSocket<'_>) -> Result<(), TransportError> 
 
     // Compute accept key
     let mut accept = [0u8; 28];
-    let accept_len = pico_socketeer::ws::compute_accept_key(key, &mut accept);
+    let accept_len = pico_conduit::ws::compute_accept_key(key, &mut accept);
 
     // Build HTTP 101 Switching Protocols response
     let mut resp = [0u8; 160];
@@ -827,10 +827,10 @@ async fn ws_server(
     config_ssid: heapless::String<32>,
     config_ip: heapless::String<16>,
 ) {
-    let mut rx_buf = [0u8; pico_socketeer::board::TCP_RX_BUF_SIZE];
-    let mut tx_buf = [0u8; pico_socketeer::board::TCP_TX_BUF_SIZE];
+    let mut rx_buf = [0u8; pico_conduit::board::TCP_RX_BUF_SIZE];
+    let mut tx_buf = [0u8; pico_conduit::board::TCP_TX_BUF_SIZE];
     let mut socket = TcpSocket::new(stack, &mut rx_buf, &mut tx_buf);
-    socket.set_nagle_enabled(!pico_socketeer::board::TCP_NODELAY);
+    socket.set_nagle_enabled(!pico_conduit::board::TCP_NODELAY);
 
     let mut reconnect_attempt: u8 = 0;
     let mut total_offline_secs: u16 = 0;
@@ -838,11 +838,11 @@ async fn ws_server(
     loop {
         LED_SIGNAL.signal(LedState::Connected);
 
-        defmt::info!("accept() on WS port {}", pico_socketeer::board::WS_PORT);
+        defmt::info!("accept() on WS port {}", pico_conduit::board::WS_PORT);
         match socket
             .accept(IpListenEndpoint {
                 addr: None,
-                port: pico_socketeer::board::WS_PORT,
+                port: pico_conduit::board::WS_PORT,
             })
             .await
         {
@@ -913,7 +913,7 @@ async fn ws_server(
 #[cfg(feature = "transport-mqtt")]
 #[allow(clippy::too_many_lines)] // MQTT client is inherently a long state-machine loop
 async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapless::String<16>) {
-    use pico_socketeer::mqtt;
+    use pico_conduit::mqtt;
     use rust_mqtt::Bytes;
     use rust_mqtt::buffer::BumpBuffer;
     use rust_mqtt::client::Client;
@@ -969,10 +969,10 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
         let broker_addr = embassy_net::Ipv4Address::from(broker_ip.octets());
 
         // TCP connect to broker
-        let mut rx_buf = [0u8; pico_socketeer::board::TCP_RX_BUF_SIZE];
-        let mut tx_buf = [0u8; pico_socketeer::board::TCP_TX_BUF_SIZE];
+        let mut rx_buf = [0u8; pico_conduit::board::TCP_RX_BUF_SIZE];
+        let mut tx_buf = [0u8; pico_conduit::board::TCP_TX_BUF_SIZE];
         let mut socket = TcpSocket::new(stack, &mut rx_buf, &mut tx_buf);
-        socket.set_nagle_enabled(!pico_socketeer::board::TCP_NODELAY);
+        socket.set_nagle_enabled(!pico_conduit::board::TCP_NODELAY);
         socket.set_timeout(Some(Duration::from_secs(90)));
 
         if let Err(e) = socket.connect((broker_addr, creds.mqtt_port)).await {
@@ -1070,7 +1070,7 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
         reconnect_attempt = 0;
 
         // Process messages
-        let mut state = pico_socketeer::router::DeviceState::default();
+        let mut state = pico_conduit::router::DeviceState::default();
         let _ = state.config_ssid.push_str(creds.ssid.as_str());
         let _ = state.config_ip.push_str(config_ip.as_str());
         state.config_connected = true;
@@ -1091,18 +1091,18 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
                     let payload = publish.message.as_ref();
                     defmt::debug!("MQTT PUBLISH received, {} bytes", payload.len());
 
-                    let resp = match pico_socketeer::protocol::parse_command(payload) {
-                        Ok(cmd) => match pico_socketeer::router::validate_route(&cmd) {
-                            Ok(route) => pico_socketeer::router::dispatch(&cmd, route, &mut state),
+                    let resp = match pico_conduit::protocol::parse_command(payload) {
+                        Ok(cmd) => match pico_conduit::router::validate_route(&cmd) {
+                            Ok(route) => pico_conduit::router::dispatch(&cmd, route, &mut state),
                             Err(err_resp) => err_resp,
                         },
-                        Err(err_code) => pico_socketeer::protocol::Response::error("", err_code),
+                        Err(err_code) => pico_conduit::protocol::Response::error("", err_code),
                     };
 
                     // Serialize and publish response
                     let mut resp_buf = [0u8; MAX_MSG_LEN];
                     if let Ok(n) =
-                        pico_socketeer::protocol::serialize_response(&resp, &mut resp_buf)
+                        pico_conduit::protocol::serialize_response(&resp, &mut resp_buf)
                     {
                         let resp_topic = unsafe {
                             TopicName::new_unchecked(
@@ -1162,7 +1162,7 @@ async fn handle_client<T: Transport>(
         let frame = match transport.read_frame(&mut frame_buf).await {
             Ok(frame) => frame,
             Err(TransportError::Protocol(err_code)) => {
-                let resp = pico_socketeer::protocol::Response::error("", err_code);
+                let resp = pico_conduit::protocol::Response::error("", err_code);
                 if let Ok(n) = serialize_response(&resp, &mut resp_buf) {
                     let _ = transport.write_frame(&resp_buf[..n]).await;
                 }
@@ -1174,7 +1174,7 @@ async fn handle_client<T: Transport>(
         };
 
         let response = match parse_command(frame) {
-            Err(err_code) => pico_socketeer::protocol::Response::error("", err_code),
+            Err(err_code) => pico_conduit::protocol::Response::error("", err_code),
             Ok(cmd) => match validate_route(&cmd) {
                 Err(r) => r,
                 Ok(route) => dispatch(&cmd, route, &mut device_state),
