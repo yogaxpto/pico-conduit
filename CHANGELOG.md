@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-04-02
+
 ### Added
 - Embassy async runtime (embassy-rp 0.9.0, embassy-net 0.8.0, cyw43 0.6.0) replacing
   the original cortex-m-rt + panic-halt scaffold
