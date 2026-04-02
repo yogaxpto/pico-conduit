@@ -668,9 +668,7 @@ impl WsTransport<'_, '_> {
 #[cfg(feature = "transport-websocket")]
 impl Transport for WsTransport<'_, '_> {
     async fn read_frame<'c>(&mut self, buf: &'c mut [u8]) -> Result<&'c [u8], TransportError> {
-        use pico_conduit::ws::{
-            OPCODE_CLOSE, OPCODE_PING, OPCODE_TEXT, encode_pong_frame, unmask,
-        };
+        use pico_conduit::ws::{OPCODE_CLOSE, OPCODE_PING, OPCODE_TEXT, encode_pong_frame, unmask};
 
         loop {
             // Read first 2 bytes of WS frame header
@@ -1101,8 +1099,7 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
 
                     // Serialize and publish response
                     let mut resp_buf = [0u8; MAX_MSG_LEN];
-                    if let Ok(n) =
-                        pico_conduit::protocol::serialize_response(&resp, &mut resp_buf)
+                    if let Ok(n) = pico_conduit::protocol::serialize_response(&resp, &mut resp_buf)
                     {
                         let resp_topic = unsafe {
                             TopicName::new_unchecked(
