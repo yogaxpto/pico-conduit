@@ -2,5 +2,8 @@
     "rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf",
     "rust-analyzer.cargo.features": [],
     "rust-analyzer.cargo.allTargets": false,
-    "rust-analyzer.diagnostics.enable": false
+    "rust-analyzer.check.command": "clippy",
+    "rust-analyzer.check.extraArgs": ["--no-deps"],
+    "rust-analyzer.check.workspace": false,
+    "rust-analyzer.server.path": "/usr/local/bin/rust-analyzer"
 }
