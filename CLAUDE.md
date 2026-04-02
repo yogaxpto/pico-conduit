@@ -1,4 +1,4 @@
-# pico-socketeer — AI Coding Conventions
+# pico-conduit — AI Coding Conventions
 
 This file documents conventions that AI coding assistants (Claude, Copilot, etc.) **must**
 follow when contributing to this project.

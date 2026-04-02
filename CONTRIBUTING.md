@@ -1,4 +1,4 @@
-# Contributing to pico-socketeer
+# Contributing to pico-conduit
 
 Thank you for your interest in contributing! This document covers everything you need to get
 started: prerequisites, build commands, code style, and the branching workflow.
@@ -71,7 +71,7 @@ cargo clippy --target thumbv8m.main-none-eabihf -- -D warnings
 2. Bump `version` in `Cargo.toml` (root package).
 3. Run Tier 1 & 2 tests locally: `cargo test --test host --no-default-features --target aarch64-unknown-linux-musl`
 4. Run Tier 3 & 4 tests manually on hardware.
-5. Push the `vx.y.z` tag to trigger the CI `release` job, which produces `pico-socketeer.uf2`.
+5. Push the `vx.y.z` tag to trigger the CI `release` job, which produces `pico-conduit.uf2`.
 6. Copy the CHANGELOG section into the GitHub Release description.
 
 ## Commit Message Format

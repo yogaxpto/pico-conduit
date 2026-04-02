@@ -1,4 +1,4 @@
-# pico-socketeer
+# pico-conduit
 
 Rust firmware for the **Raspberry Pi Pico 2W** (RP2350 / CYW43439) and **Pico W** (RP2040 /
 CYW43439) that exposes a JSON command/response protocol over one of three compile-time
@@ -17,7 +17,7 @@ client to read and write GPIO, UART, SPI, I2C, PWM, ADC, and USB peripherals.
 
 ### 1. Flash the firmware
 
-Download the latest `pico-socketeer.uf2` from [Releases](../../releases).
+Download the latest `pico-conduit.uf2` from [Releases](../../releases).
 
 Hold the BOOTSEL button on the Pico 2W while plugging in USB. Drag-and-drop the `.uf2` file
 onto the `RPI-RP2` drive that appears. The board reboots automatically.
@@ -89,8 +89,8 @@ See [PROTOCOL.md](PROTOCOL.md) for the full command reference.
 
 ```sh
 # Clone and enter the repo
-git clone https://github.com/<your-org>/pico-socketeer.git
-cd pico-socketeer
+git clone https://github.com/<your-org>/pico-conduit.git
+cd pico-conduit
 
 # Download CYW43 firmware blobs (one-time setup)
 mkdir cyw43-firmware

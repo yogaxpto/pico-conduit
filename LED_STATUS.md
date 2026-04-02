@@ -1,4 +1,4 @@
-# pico-socketeer LED Status Reference
+# pico-conduit LED Status Reference
 
 The onboard LED (driven via CYW43 GPIO0) communicates firmware state through blink patterns.
 

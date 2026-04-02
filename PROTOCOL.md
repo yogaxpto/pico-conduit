@@ -1,8 +1,8 @@
-# pico-socketeer Wire Protocol
+# pico-conduit Wire Protocol
 
 ## Overview
 
-pico-socketeer exposes a JSON command/response protocol over one of three compile-time
+pico-conduit exposes a JSON command/response protocol over one of three compile-time
 selectable transports: **TCP** (default), **WebSocket**, or **MQTT**. The JSON schema,
 interface handlers, and error codes are identical across all transports — only the framing
 and connection management differ.
@@ -303,7 +303,7 @@ All error codes are lowercase snake_case `&str` values in the `"error"` field.
 
 ## Binary Codec (optional)
 
-By default pico-socketeer uses UTF-8 JSON for all commands and responses. An optional
+By default pico-conduit uses UTF-8 JSON for all commands and responses. An optional
 **postcard** binary codec can be selected at compile time via the `codec-postcard` feature flag.
 
 ### Codec evaluation
