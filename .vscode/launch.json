@@ -7,15 +7,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'pico-socketeer'",
+            "name": "Debug executable 'pico-conduit'",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=pico-socketeer",
-                    "--package=pico-socketeer"
+                    "--bin=pico-conduit",
+                    "--package=pico-conduit"
                 ],
                 "filter": {
-                    "name": "pico-socketeer",
+                    "name": "pico-conduit",
                     "kind": "bin"
                 }
             },
@@ -25,16 +25,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in executable 'pico-socketeer'",
+            "name": "Debug unit tests in executable 'pico-conduit'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--bin=pico-socketeer",
-                    "--package=pico-socketeer"
+                    "--bin=pico-conduit",
+                    "--package=pico-conduit"
                 ],
                 "filter": {
-                    "name": "pico-socketeer",
+                    "name": "pico-conduit",
                     "kind": "bin"
                 }
             },
