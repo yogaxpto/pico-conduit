@@ -7,6 +7,13 @@ name = "pico-conduit"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
+description = "JSON command/response firmware for Raspberry Pi Pico W/2W — control GPIO, UART, SPI, I2C, PWM, ADC, and USB over TCP, WebSocket, or MQTT"
+repository = "https://github.com/yogaxpto/pico-conduit"
+homepage = "https://github.com/yogaxpto/pico-conduit"
+readme = "README.md"
+keywords = ["embedded", "raspberry-pi", "pico", "iot", "no-std"]
+categories = ["embedded", "hardware-support", "no-std"]
+authors = ["Diogo Santos Martins"]
 
 # cargo-machete false positives: these crates are used only behind cfg(target_os = "none")
 # or as transitive enablers (portable-atomic enables critical-section for heapless).
