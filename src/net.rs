@@ -1103,9 +1103,7 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
                             MqttString::from_str(resp_topic_str.as_str())
                                 .expect("resp topic exceeds MqttString limit"),
                         );
-                        let pub_opts = PublicationOptions::new(
-                            TopicReference::Name(resp_topic),
-                        );
+                        let pub_opts = PublicationOptions::new(TopicReference::Name(resp_topic));
                         if let Err(e) = client.publish(&pub_opts, Bytes::from(&resp_buf[..n])).await
                         {
                             defmt::warn!("MQTT PUBLISH response failed: {:?}", e);
