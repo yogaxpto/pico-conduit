@@ -8,6 +8,11 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 
+# cargo-machete false positives: these crates are used only behind cfg(target_os = "none")
+# or as transitive enablers (portable-atomic enables critical-section for heapless).
+[package.metadata.cargo-machete]
+ignored = ["embedded-hal-async", "portable-atomic"]
+
 # The `embedded` feature gates the binary target (src/main.rs) which requires
 # embassy, cyw43, and other Cortex-M-only crates. Host tests pass --no-default-features
 # so the binary is silently skipped.
