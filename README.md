@@ -75,6 +75,11 @@ See [PROTOCOL.md](PROTOCOL.md) for the full command reference.
 
 ## Developer Setup
 
+> **Quick start with Dev Container:** Open this project in [VS Code](https://code.visualstudio.com/) or
+> [GitHub Codespaces](https://github.com/features/codespaces) — the included Dev Container has all tools
+> pre-installed (Rust, embedded targets, probe-rs, flip-link, rust-analyzer). See
+> [.devcontainer/](.devcontainer/) for details.
+
 ### Prerequisites
 
 | Tool | Version | Install |

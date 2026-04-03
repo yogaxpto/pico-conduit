@@ -5,6 +5,9 @@ started: prerequisites, build commands, code style, and the branching workflow.
 
 ## Prerequisites
 
+> **Tip:** The fastest way to get started is the included [Dev Container](.devcontainer/) —
+> open this repo in VS Code or GitHub Codespaces and all tools are pre-installed.
+
 | Tool | Version | Notes |
 |------|---------|-------|
 | Rust stable | ≥ 1.85 | `rustup toolchain install stable` |
