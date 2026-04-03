@@ -382,6 +382,9 @@ jobs:
           . /etc/cargo-env
           echo "triple=${HOST_TRIPLE}" >> "$GITHUB_OUTPUT"
 
+      - name: Start sccache or disable
+        run: sccache --start-server 2>/dev/null || echo "RUSTC_WRAPPER=" >> "$GITHUB_ENV"
+
       - name: Install quality tools
         run: cargo binstall cargo-audit cargo-machete --no-confirm --force
 
