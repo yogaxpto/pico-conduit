@@ -358,6 +358,49 @@ jobs:
       - name: Clippy (embedded firmware)
         run: cargo clippy --release --target ${{ matrix.target }} ${{ matrix.cargo-features }} -- -D warnings
 
+  # ── Code quality: audit, unused deps, doc warnings ────────────────
+  # Runs in parallel with lint-* and host-build-* — only needs the
+  # pico2w deps image (host toolchain + cargo-binstall).
+  quality:
+    name: Quality
+    needs: [build-pico2w]
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.build-pico2w.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve host target
+        id: host
+        run: |
+          . /etc/cargo-env
+          echo "triple=${HOST_TRIPLE}" >> "$GITHUB_OUTPUT"
+
+      - name: Install quality tools
+        run: cargo binstall cargo-audit cargo-machete --no-confirm --force
+
+      - name: Dependency audit (RustSec)
+        run: cargo audit
+
+      - name: Unused dependency check
+        run: cargo machete
+
+      - name: Doc warnings (lib)
+        run: cargo doc --no-deps --no-default-features --target ${{ steps.host.outputs.triple }}
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
+      - name: Doc warnings (client)
+        run: cargo doc --no-deps -p pico-conduit-client --target ${{ steps.host.outputs.triple }}
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
   # ── Host tests: pico2w board ──────────────────────────────────────
   host-test-pico2w:
     name: Test (pico2w)
@@ -416,7 +459,7 @@ jobs:
   # a dedicated runner.
   build-firmware:
     name: Build Firmware (${{ matrix.board }})
-    needs: [build-pico2w, build-pico1w, lint-pico2w, lint-pico1w, host-test-pico2w, host-test-pico1w]
+    needs: [build-pico2w, build-pico1w, quality, lint-pico2w, lint-pico1w, host-test-pico2w, host-test-pico1w]
     runs-on: ubuntu-latest
     container:
       image: >-
