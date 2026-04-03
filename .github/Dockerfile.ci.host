@@ -1,3 +1,4 @@
+# check=skip=InvalidDefaultArgInFrom
 # CI host test binary compilation.
 #
 # Two-stage build — Docker BuildKit runs both stages in PARALLEL when built
