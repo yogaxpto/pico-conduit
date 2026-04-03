@@ -1,5 +1,7 @@
 # pico-conduit
 
+[![CI](https://github.com/yogaxpto/pico-conduit/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/yogaxpto/pico-conduit/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Rust](https://img.shields.io/badge/Rust-stable%20%E2%89%A5%201.85-orange.svg)](https://www.rust-lang.org/)
+
 Rust firmware for the **Raspberry Pi Pico 2W** (RP2350 / CYW43439) and **Pico W** (RP2040 /
 CYW43439) that exposes a JSON command/response protocol over one of three compile-time
 selectable transports — **TCP** (default), **WebSocket**, or **MQTT** — allowing a remote
