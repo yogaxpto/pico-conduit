@@ -917,7 +917,7 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
     use rust_mqtt::client::Client;
     use rust_mqtt::client::event::Event;
     use rust_mqtt::client::options::{
-        ConnectOptions, PublicationOptions, RetainHandling, SubscriptionOptions,
+        ConnectOptions, PublicationOptions, RetainHandling, SubscriptionOptions, TopicReference,
     };
     use rust_mqtt::config::{KeepAlive, SessionExpiryInterval};
     use rust_mqtt::types::{MqttString, QoS, TopicName};
@@ -992,16 +992,15 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
         // Set up MQTT client with BumpBuffer (no-alloc)
         let mut buf_storage = [0u8; 1024];
         let mut buffer = BumpBuffer::new(&mut buf_storage);
-        let mut client: Client<'_, _, _, 1, 1, 1> = Client::new(&mut buffer);
+        let mut client: Client<'_, _, _, 1, 1, 1, 0> = Client::new(&mut buffer);
 
-        let connect_opts = ConnectOptions {
-            session_expiry_interval: SessionExpiryInterval::Seconds(0),
-            clean_start: true,
-            keep_alive: KeepAlive::Seconds(60),
-            will: None,
-            user_name: None,
-            password: None,
-        };
+        let connect_opts = ConnectOptions::new()
+            .clean_start()
+            .session_expiry_interval(SessionExpiryInterval::EndOnDisconnect)
+            .keep_alive(KeepAlive::Seconds(
+                // SAFETY: 60 is non-zero
+                unsafe { core::num::NonZero::new_unchecked(60) },
+            ));
         let mqtt_client_id = MqttString::try_from(client_id_str.as_str())
             .expect("client_id exceeds MqttString limit");
 
@@ -1025,20 +1024,19 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
 
         // Reset bump buffer after connect handshake to reclaim space
         // SAFETY: no references to connect-phase data are held at this point
-        unsafe { client.buffer().reset() };
+        unsafe { client.buffer_mut().reset() };
 
         // Subscribe to command topic
-        let cmd_topic = unsafe {
-            TopicName::new_unchecked(
-                MqttString::from_slice(cmd_topic_str.as_str())
-                    .expect("cmd topic exceeds MqttString limit"),
-            )
-        };
+        let cmd_topic = TopicName::new_unchecked(
+            MqttString::from_str(cmd_topic_str.as_str())
+                .expect("cmd topic exceeds MqttString limit"),
+        );
         let sub_opts = SubscriptionOptions {
             retain_handling: RetainHandling::SendIfNotSubscribedBefore,
             retain_as_published: false,
             no_local: false,
             qos: QoS::AtMostOnce,
+            subscription_identifier: None,
         };
         if let Err(e) = client.subscribe(cmd_topic.clone().into(), sub_opts).await {
             defmt::warn!("MQTT SUBSCRIBE failed: {:?}", e);
@@ -1082,7 +1080,7 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
             // Reset bump buffer before each poll to reclaim space from previous iteration
             // SAFETY: no references to previous poll data are held — response was serialized
             // and published (or dropped) before reaching this point
-            unsafe { client.buffer().reset() };
+            unsafe { client.buffer_mut().reset() };
 
             match client.poll().await {
                 Ok(Event::Publish(publish)) => {
@@ -1101,17 +1099,13 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
                     let mut resp_buf = [0u8; MAX_MSG_LEN];
                     if let Ok(n) = pico_conduit::protocol::serialize_response(&resp, &mut resp_buf)
                     {
-                        let resp_topic = unsafe {
-                            TopicName::new_unchecked(
-                                MqttString::from_slice(resp_topic_str.as_str())
-                                    .expect("resp topic exceeds MqttString limit"),
-                            )
-                        };
-                        let pub_opts = PublicationOptions {
-                            retain: false,
-                            topic: resp_topic,
-                            qos: QoS::AtMostOnce,
-                        };
+                        let resp_topic = TopicName::new_unchecked(
+                            MqttString::from_str(resp_topic_str.as_str())
+                                .expect("resp topic exceeds MqttString limit"),
+                        );
+                        let pub_opts = PublicationOptions::new(
+                            TopicReference::Name(resp_topic),
+                        );
                         if let Err(e) = client.publish(&pub_opts, Bytes::from(&resp_buf[..n])).await
                         {
                             defmt::warn!("MQTT PUBLISH response failed: {:?}", e);
