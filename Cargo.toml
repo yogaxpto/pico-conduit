@@ -98,7 +98,7 @@ embassy-net     = { version = "0.9.0", features = [
 embassy-futures = "0.1.1"
 
 # MQTT client (async, no_std, uses embedded-io-async directly — no adapter needed)
-rust-mqtt = { version = "0.4.1", default-features = false, features = ["v5", "bump", "defmt"], optional = true }
+rust-mqtt = { version = "0.5.0", default-features = false, features = ["v5", "bump", "defmt"], optional = true }
 
 # CYW43439 Wi-Fi driver (Pico 2W onboard chip)
 cyw43     = { version = "0.7.0", features = ["defmt", "firmware-logs"] }
