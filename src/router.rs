@@ -88,7 +88,7 @@ static VALID_ROUTES: &[(&str, &[&str])] = &[
 ///
 /// # Errors
 ///
-/// Returns `Err` if the interface or action is absent or not in [`VALID_ROUTES`].
+/// Returns `Err` if the interface or action is absent or not in the routing table.
 pub fn validate_route<'a>(cmd: &Command<'a>) -> Result<(&'a str, &'a str), Response<'a>> {
     let Some(interface) = cmd.interface else {
         return Err(Response::error(cmd.id, ERROR_UNKNOWN_INTERFACE));

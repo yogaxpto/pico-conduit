@@ -3,7 +3,7 @@
 //! Defines [`LedState`], [`LedPattern`], and [`SOS_TIMING`]. These are `no_std`-compatible
 //! and fully testable on the host.
 //!
-//! [`LED_SIGNAL`] is also defined here, gated to `target_os = "none"` because it depends
+//! `LED_SIGNAL` is also defined here, gated to `target_os = "none"` because it depends
 //! on `embassy_sync`. `led_task` and `set_led` live in `src/net.rs` (CYW43-specific).
 //!
 //! # LED State Reference

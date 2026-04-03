@@ -8,7 +8,7 @@
 //! | Codec | Feature | Format | Size (typical GPIO cmd) |
 //! |-------|---------|--------|------------------------|
 //! | [`JsonCodec`] | _(default, always available)_ | UTF-8 JSON | ~80 bytes |
-//! | [`PostcardCodec`] | `codec-postcard` | postcard binary | ~15 bytes |
+//! | `PostcardCodec` | `codec-postcard` | postcard binary | ~15 bytes |
 //!
 //! ## Crate evaluation
 //!

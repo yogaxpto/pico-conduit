@@ -23,7 +23,7 @@
 //! # Error Codes
 //!
 //! All `"error"` values are `&'static str` — no heap allocation.
-//! See [`ERROR_*`] constants for the full catalogue.
+//! See the `ERROR_*` constants for the full catalogue.
 //!
 //! # Max Message Size
 //!
