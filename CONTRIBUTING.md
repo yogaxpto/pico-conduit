@@ -91,3 +91,8 @@ Example:
 ```
 feat(gpio): add pull-down mode to set_mode action
 ```
+
+## Code of Conduct
+
+This project follows the [Contributor Covenant v2.1](CODE_OF_CONDUCT.md). By participating
+you agree to abide by its terms.
