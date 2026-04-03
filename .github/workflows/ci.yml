@@ -12,7 +12,8 @@ on:
       - '**.md'
 
 permissions:
-  contents: read
+  contents: write
+  packages: write
 
 concurrency:
   group: ci-${{ github.ref }}
