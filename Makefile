@@ -46,6 +46,7 @@ CYW43_BASE      := https://raw.githubusercontent.com/embassy-rs/embassy/main/cyw
 .PHONY: flash run run-debug uf2
 .PHONY: test test-host test-board test-client test-integration
 .PHONY: lint fmt fmt-check clippy clippy-client
+.PHONY: quality audit machete doc-check
 .PHONY: size check-size
 .PHONY: ci debug clean
 
@@ -86,11 +87,16 @@ help:
 	@printf '  fmt-check            Check formatting without modifying files\n'
 	@printf '  clippy               Clippy firmware (embedded target, -D warnings)\n'
 	@printf '  clippy-client        Clippy client crate (host target, -D warnings)\n'
+	@printf '\nQuality:\n'
+	@printf '  quality              audit + machete + doc-check\n'
+	@printf '  audit                Check deps for known vulnerabilities (RustSec)\n'
+	@printf '  machete              Detect unused dependencies\n'
+	@printf '  doc-check            Rustdoc lint (broken links, -D warnings)\n'
 	@printf '\nSize / Budget:\n'
 	@printf '  size                 Print firmware section sizes (text/data/bss)\n'
 	@printf '  check-size           Verify firmware fits within flash budget\n'
 	@printf '\nCI:\n'
-	@printf '  ci                   Full local CI: fmt-check → clippy → test → build → check-size\n'
+	@printf '  ci                   Full local CI: lint → quality → test → build → check-size\n'
 	@printf '\nOther:\n'
 	@printf '  debug                flash with LOG_LEVEL=debug (verbose RTT output)\n'
 	@printf '  clean                cargo clean\n'
@@ -187,6 +193,20 @@ clippy:
 clippy-client:
 	cargo clippy -p pico-conduit-client --target $(HOST_TARGET) -- -D warnings
 
+# ── Quality ─────────────────────────────────────────────────────────────────
+
+quality: audit machete doc-check
+
+audit:
+	cargo audit
+
+machete:
+	cargo machete
+
+doc-check:
+	RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --no-default-features --target $(HOST_TARGET)
+	RUSTDOCFLAGS="-D warnings" cargo doc --no-deps -p pico-conduit-client --target $(HOST_TARGET)
+
 # ── Size / Flash Budget ───────────────────────────────────────────────────────
 
 size: build-release
@@ -208,7 +228,7 @@ check-size: build-release
 
 # ── CI ────────────────────────────────────────────────────────────────────────
 
-ci: fmt-check clippy clippy-client test build-release check-size
+ci: lint quality test build-release check-size
 	@echo "CI simulation complete — all checks passed."
 
 # ── Debug / Clean ─────────────────────────────────────────────────────────────
