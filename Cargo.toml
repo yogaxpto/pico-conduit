@@ -132,7 +132,7 @@ serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 # Proc-macro test helpers (e.g. #[require_env("PICO_IP")])
 pico-conduit-macros = { path = "macros" }
-sha1 = "0.10"
+sha1 = "0.11"
 
 [[test]]
 name = "host"
