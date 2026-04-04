@@ -27,7 +27,8 @@
 				"hbenl.vscode-test-explorer",
 				"swellaby.vscode-rust-test-adapter",
 				"github.vscode-github-actions",
-				"vadimcn.vscode-lldb"
+				"vadimcn.vscode-lldb",
+				"ZixuanWang.linkerscript"
 			],
 			"settings": {
 				"rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf",
