@@ -1,0 +1,103 @@
+name: Build CI Docker Image
+
+on:
+  workflow_call:
+    inputs:
+      board:
+        required: true
+        type: string
+        description: "Board variant (pico2w or pico1w)"
+      docker-target:
+        required: true
+        type: string
+        description: "Dockerfile target stage (final-pico2w or final-pico1w)"
+      tag-latest:
+        required: true
+        type: boolean
+        description: "Whether to tag as latest on master pushes"
+    outputs:
+      image:
+        description: "Full GHCR image reference"
+        value: ${{ jobs.build.outputs.image }}
+
+jobs:
+  build:
+    name: Build CI Image (${{ inputs.board }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.check.outputs.image }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Compute deps hash
+        id: deps-hash
+        run: |
+          HASH=$(cat \
+            Cargo.toml Cargo.lock build.rs \
+            client/Cargo.toml macros/Cargo.toml \
+            rust-toolchain.toml \
+            .cargo/config.toml \
+            memory-pico2w.x memory-pico1w.x \
+            .github/Dockerfile.ci \
+            | sha256sum | cut -c1-16)
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if deps image exists
+        id: check
+        run: |
+          TAG="deps-${{ inputs.board }}-${{ steps.deps-hash.outputs.hash }}"
+          IMAGE="ghcr.io/${{ github.repository }}/ci:${TAG}"
+          if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+
+      # Expose GHA cache service URL/token so sccache inside BuildKit can
+      # read/write the Actions cache.  actions/cache injects these env vars
+      # automatically; buildx needs them forwarded as build secrets.
+      - name: Expose GitHub Actions cache env
+        if: steps.check.outputs.exists == 'false'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env['ACTIONS_CACHE_URL'] || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env['ACTIONS_RUNTIME_TOKEN'] || '');
+
+      - uses: docker/build-push-action@v7
+        if: steps.check.outputs.exists == 'false'
+        with:
+          context: .
+          file: .github/Dockerfile.ci
+          target: ${{ inputs.docker-target }}
+          push: true
+          tags: |
+            ${{ steps.check.outputs.image }}
+            ${{ inputs.tag-latest && github.ref == 'refs/heads/master' && format('ghcr.io/{0}/ci:latest', github.repository) || '' }}
+          cache-from: type=gha,scope=${{ inputs.board }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.board }}
+          secrets: |
+            actions_cache_url=${{ env.ACTIONS_CACHE_URL }}
+            actions_runtime_token=${{ env.ACTIONS_RUNTIME_TOKEN }}
+
+      - name: Tag as latest (skip path)
+        if: |
+          steps.check.outputs.exists == 'true'
+          && inputs.tag-latest
+          && github.ref == 'refs/heads/master'
+        run: |
+          docker buildx imagetools create \
+            ${{ steps.check.outputs.image }} \
+            --tag ghcr.io/${{ github.repository }}/ci:latest

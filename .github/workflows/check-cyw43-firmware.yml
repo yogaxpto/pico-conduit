@@ -1,0 +1,83 @@
+name: Check CYW43 firmware updates
+
+on:
+  schedule:
+    - cron: "0 12 * * 1" # Every Monday at 12:00 UTC (after Dependabot's weekly run)
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+env:
+  CYW43_BASE: https://raw.githubusercontent.com/embassy-rs/embassy/main/cyw43-firmware
+  CYW43_DIR: cyw43-firmware
+  FW_FILES: "43439A0.bin 43439A0_clm.bin nvram_rp2040.bin"
+
+jobs:
+  check-firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download upstream firmware
+        run: |
+          mkdir -p /tmp/upstream
+          for f in $FW_FILES; do
+            curl -fsSL "$CYW43_BASE/$f" -o "/tmp/upstream/$f"
+          done
+
+      - name: Compare local and upstream SHA-256 hashes
+        id: diff
+        run: |
+          changed=""
+          for f in $FW_FILES; do
+            local_hash=$(sha256sum "$CYW43_DIR/$f" | cut -d' ' -f1)
+            upstream_hash=$(sha256sum "/tmp/upstream/$f" | cut -d' ' -f1)
+            if [ "$local_hash" != "$upstream_hash" ]; then
+              changed="${changed}- \`${f}\`\n"
+            fi
+          done
+          if [ -n "$changed" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "files<<EOF"
+              echo -e "$changed"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check for existing open issue
+        if: steps.diff.outputs.changed == 'true'
+        id: existing
+        run: |
+          count=$(gh issue list \
+            --label "dependencies" \
+            --search "CYW43 firmware update available" \
+            --state open \
+            --json number \
+            --jq 'length')
+          echo "exists=$([ "$count" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Open issue
+        if: steps.diff.outputs.changed == 'true' && steps.existing.outputs.exists == 'false'
+        run: |
+          gh issue create \
+            --title "CYW43 firmware update available" \
+            --label "dependencies" \
+            --assignee "yogaxpto" \
+            --body "$(cat <<EOF
+          A newer version of the CYW43 firmware blobs has been detected upstream.
+
+          **Changed files:**
+          ${{ steps.diff.outputs.files }}
+          **Upstream source:** \`embassy-rs/embassy@main/cyw43-firmware/\`
+
+          Run \`make setup-firmware\` after deleting the local copies, or manually download the new blobs.
+          EOF
+          )"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
