@@ -115,7 +115,11 @@ $(CYW43_DIR)/43439A0_clm.bin:
 	mkdir -p $(CYW43_DIR)
 	curl -fsSL $(CYW43_BASE)/43439A0_clm.bin -o $@
 
-setup-firmware: $(CYW43_DIR)/43439A0.bin $(CYW43_DIR)/43439A0_clm.bin
+$(CYW43_DIR)/nvram_rp2040.bin:
+	mkdir -p $(CYW43_DIR)
+	curl -fsSL $(CYW43_BASE)/nvram_rp2040.bin -o $@
+
+setup-firmware: $(CYW43_DIR)/43439A0.bin $(CYW43_DIR)/43439A0_clm.bin $(CYW43_DIR)/nvram_rp2040.bin
 
 setup-env:
 	@if [ -f .env ]; then \
