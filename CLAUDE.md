@@ -83,3 +83,38 @@ is gated with `#[cfg(feature = "transport-*")]`.
 - **Pico 2W (default):** `thumbv8m.main-none-eabihf` — feature `pico2w`
 - **Pico W:** `thumbv6m-none-eabi` — feature `pico1w`
 - **Host tests:** `aarch64-unknown-linux-musl` (or native host triple) — no `embedded` feature
+
+## Wiki
+
+The GitHub wiki lives in a **separate Git repository** cloned into the `wiki/` folder
+of this project:
+
+```
+git clone https://github.com/yogaxpto/pico-conduit.wiki.git wiki
+```
+
+The `wiki/` folder is **not** part of the main `pico-conduit` repo — it has its own
+`.git` directory and its own commit history. Do not commit `wiki/` contents to the main
+repo.
+
+### Batch agent workflow
+
+When wiki pages are written by batch / parallel agents:
+
+1. Each agent works on its assigned page(s) and creates a commit in the `wiki/` repo.
+2. Before pushing, each agent must **rebase onto the main branch** of the wiki repo:
+   ```bash
+   cd wiki && git fetch origin && git rebase origin/master
+   ```
+3. Resolve any conflicts (unlikely for separate pages, but handle if they arise).
+4. Push the rebased commits.
+
+### File naming
+
+Wiki pages are Markdown files in the `wiki/` root. GitHub wiki derives the page title
+from the filename, so use `kebab-case` with `.md` extension:
+
+- `Home.md` (landing page — GitHub requires this exact name)
+- `Hardware-Setup.md`
+- `Flashing-the-Firmware.md`
+- `Wi-Fi-Provisioning.md`
