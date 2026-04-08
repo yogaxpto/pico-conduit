@@ -90,7 +90,7 @@ The GitHub wiki lives in a **separate Git repository** cloned into the `wiki/` f
 of this project:
 
 ```
-git clone https://github.com/yogaxpto/pico-conduit.wiki.git wiki
+git clone git@github.com:yogaxpto/pico-conduit.wiki.git wiki
 ```
 
 The `wiki/` folder is **not** part of the main `pico-conduit` repo — it has its own
