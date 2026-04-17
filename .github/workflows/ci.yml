@@ -479,7 +479,7 @@ jobs:
         run: elf2uf2-rs elf-pico1w/pico-conduit pico-conduit-pico1w.uf2
 
       - name: Upload UF2s to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             pico-conduit-pico2w.uf2
