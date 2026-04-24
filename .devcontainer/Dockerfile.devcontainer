@@ -43,6 +43,9 @@ RUN set -eux; \
 # flip-link: pre-built binary via binstall (~5 seconds)
 RUN cargo binstall flip-link --no-confirm --force
 
+# Quality tools used by `make ci` (audit + machete): pre-built binaries (~5 seconds)
+RUN cargo binstall cargo-audit cargo-machete --no-confirm --force
+
 # elf2uf2-rs: no pre-built musl binaries, compile from source (~2-3 min)
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
