@@ -1539,9 +1539,9 @@ dependencies = [
 
 [[package]]
 name = "rust-mqtt"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8a645f7bc8f61bba75318c4d50ef67d215bea996b2aa2dcb7c3c3c0f3a91219"
+checksum = "7609e36dcc9f31070b169bbdf3b903f7004f951807f14e0ae9f662d7c2ae3da7"
 dependencies = [
  "const_fn",
  "defmt 1.0.1",
