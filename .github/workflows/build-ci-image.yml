@@ -87,7 +87,7 @@ jobs:
             ${{ steps.check.outputs.image }}
             ${{ inputs.tag-latest && github.ref == 'refs/heads/master' && format('ghcr.io/{0}/ci:latest', github.repository) || '' }}
           cache-from: type=gha,scope=${{ inputs.board }}
-          cache-to: type=gha,mode=max,scope=${{ inputs.board }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.board }},ignore-error=true
           secrets: |
             actions_cache_url=${{ env.ACTIONS_CACHE_URL }}
             actions_runtime_token=${{ env.ACTIONS_RUNTIME_TOKEN }}

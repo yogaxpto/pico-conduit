@@ -92,7 +92,7 @@ jobs:
           tags: ghcr.io/${{ github.repository }}/ci:host-pico2w-${{ github.sha }}
           build-args: DEPS_IMAGE=${{ needs.build-pico2w.outputs.image }}
           cache-from: type=gha,scope=host-pico2w
-          cache-to: type=gha,mode=max,scope=host-pico2w
+          cache-to: type=gha,mode=max,scope=host-pico2w,ignore-error=true
 
   # ── Host test binary compilation: pico1w board ────────────────────
   # Compiles only the pico1w host test binary.
@@ -127,7 +127,7 @@ jobs:
           tags: ghcr.io/${{ github.repository }}/ci:host-pico1w-${{ github.sha }}
           build-args: DEPS_IMAGE=${{ needs.build-pico2w.outputs.image }}
           cache-from: type=gha,scope=host-pico1w
-          cache-to: type=gha,mode=max,scope=host-pico1w
+          cache-to: type=gha,mode=max,scope=host-pico1w,ignore-error=true
 
   # ── Fast checks: pico2w variants ─────────────────────────────────
   # Starts as soon as build-pico2w is ready — does not wait for build-pico1w.
