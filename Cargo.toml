@@ -51,7 +51,7 @@ serde           = { version = "1.0", default-features = false, features = ["deri
 serde-json-core = "0.6.0"
 
 # Fixed-capacity data structures (no heap)
-heapless = { version = "0.9.2", features = ["serde"] }
+heapless = { version = "0.9.3", features = ["serde"] }
 
 # Structured logging — host-compatible facade (macros become no-ops on host)
 defmt = "1.0.1"
@@ -138,7 +138,7 @@ cortex-m-rt = "0.7"
 # NEVER linked into the firmware binary — dev-dependency only
 embedded-hal-mock = { version = "0.11.1", features = ["embedded-hal-async", "eh1"] }
 # heapless is a [dependencies] entry but tests in tests/ are separate crates; re-declare here
-heapless = { version = "0.9.2", features = ["serde"] }
+heapless = { version = "0.9.3", features = ["serde"] }
 # JSON construction/parsing for Tier 4 integration tests
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
