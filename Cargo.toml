@@ -54,7 +54,7 @@ serde-json-core = "0.6.0"
 heapless = { version = "0.9.3", features = ["serde"] }
 
 # Structured logging — host-compatible facade (macros become no-ops on host)
-defmt = "1.0.1"
+defmt = "1.1.0"
 
 # Embedded HAL traits — pure interfaces, compile everywhere
 embedded-hal       = "1.0"
