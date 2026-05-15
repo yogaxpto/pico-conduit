@@ -120,7 +120,7 @@ cyw43-pio = { version = "0.10.0", features = ["defmt"] }
 panic-probe = { version = "1.0.0", features = ["print-defmt"] }
 
 # RTT logger transport (probe-rs reads via SWD)
-defmt-rtt = "1.0.0"
+defmt-rtt = "1.2.0"
 
 # Static allocation helper (requires embedded linker sections)
 static_cell = "2.1"
