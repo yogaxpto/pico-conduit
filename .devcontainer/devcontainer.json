@@ -9,6 +9,9 @@
 	"mounts": [
 		"type=volume,source=claude-code-auth,target=/root/.claude"
 	],
+	"containerEnv": {
+		"IS_SANDBOX": "1"
+	},
 	"runArgs": ["--privileged", "-v", "/dev:/dev"],
 	"postCreateCommand": "rustup show && install-ra-vsix",
 	"forwardPorts": [4242],
