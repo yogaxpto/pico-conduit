@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# rust-analyzer runnables shim — do not invoke directly.
+#
+# Wired up via "rust-analyzer.runnables.command" in .vscode/settings.json so the
+# Test Explorer can run the host test suite while rust-analyzer keeps analysing
+# the firmware for thumbv8m.main-none-eabihf.
+#
+# Bare `cargo test` cannot work in this repo: .cargo/config.toml pins
+# [build] target = thumbv8m.main-none-eabihf, and the default feature set
+# ("embedded", "pico2w", "transport-tcp") drags in embedded-only dependencies.
+# Host tests need `--no-default-features --target <host triple>`, matching
+# `make test-host` / `make test-board`.
+#
+# This shim rewrites only `test` and `bench`; every other cargo subcommand
+# (build, run, check, ...) is passed through untouched.
+
+set -euo pipefail
+
+CARGO=${CARGO:-cargo}
+
+case ${1:-} in
+    test | bench) ;;
+    *) exec "$CARGO" "$@" ;;
+esac
+
+subcommand=$1
+shift
+
+# Same derivation as HOST_TARGET in the Makefile.
+host_target=$(rustc -vV | sed -n 's/host: //p')
+
+# Split cargo args from test-binary args, dropping any target/feature flags
+# rust-analyzer derived from rust-analyzer.cargo.* so ours are authoritative.
+cargo_args=()
+binary_args=()
+saw_separator=0
+skip_next=0
+
+for arg in "$@"; do
+    if ((skip_next)); then
+        skip_next=0
+        continue
+    fi
+    if ((saw_separator)); then
+        binary_args+=("$arg")
+        continue
+    fi
+    case $arg in
+        --) saw_separator=1 ;;
+        --target | --features | -F) skip_next=1 ;;
+        --target=* | --features=* | --no-default-features | --all-features) ;;
+        *) cargo_args+=("$arg") ;;
+    esac
+done
+
+# pico2w matches the feature set rust-analyzer analyses with, so the tests the
+# Test Explorer lists are exactly the ones this builds. Sibling workspace
+# members (client, macros) have no such features — only retarget those.
+feature_args=()
+for arg in ${cargo_args[@]+"${cargo_args[@]}"}; do
+    if [[ $arg == pico-conduit || $arg == --package=pico-conduit ]]; then
+        feature_args=(--no-default-features --features pico2w)
+        break
+    fi
+done
+
+command=("$CARGO" "$subcommand" ${feature_args[@]+"${feature_args[@]}"} --target "$host_target")
+command+=(${cargo_args[@]+"${cargo_args[@]}"})
+((saw_separator)) && command+=(-- ${binary_args[@]+"${binary_args[@]}"})
+
+exec "${command[@]}"

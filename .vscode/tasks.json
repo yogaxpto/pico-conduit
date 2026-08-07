@@ -1,0 +1,94 @@
+{
+    // Whole-suite runs, matching what CI does. For running individual tests,
+    // use the Test Explorer (see .vscode/cargo-host-test).
+    //
+    // `cargo test` cannot be run bare in this repo: .cargo/config.toml pins
+    // [build] target = thumbv8m.main-none-eabihf, and the default feature set
+    // ("embedded", "pico2w", "transport-tcp") pulls in embedded-only deps.
+    // Host tests need `--no-default-features --target $(HOST_TARGET)`, which is
+    // exactly what these Make targets pass.
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "test-host",
+            "detail": "Tier 1+2 host unit/mock tests",
+            "type": "shell",
+            "command": "make test-host",
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "problemMatcher": ["$rustc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            }
+        },
+        {
+            "label": "test",
+            "detail": "test-host + test-board + test-client (no hardware)",
+            "type": "shell",
+            "command": "make test",
+            "group": "test",
+            "problemMatcher": ["$rustc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            }
+        },
+        {
+            "label": "test-board",
+            "detail": "Board-specific tests for both pico2w and pico1w",
+            "type": "shell",
+            "command": "make test-board",
+            "group": "test",
+            "problemMatcher": ["$rustc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            }
+        },
+        {
+            "label": "test-client",
+            "detail": "pico-conduit-client crate tests",
+            "type": "shell",
+            "command": "make test-client",
+            "group": "test",
+            "problemMatcher": ["$rustc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            }
+        },
+        {
+            "label": "lint",
+            "detail": "fmt-check + clippy + clippy-client",
+            "type": "shell",
+            "command": "make lint",
+            "group": "build",
+            "problemMatcher": ["$rustc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            }
+        },
+        {
+            "label": "ci",
+            "detail": "Full local CI: lint -> quality -> test -> build -> check-size",
+            "type": "shell",
+            "command": "make ci",
+            "group": "build",
+            "problemMatcher": ["$rustc"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated",
+                "clear": true
+            }
+        }
+    ]
+}

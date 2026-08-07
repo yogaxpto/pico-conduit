@@ -1,9 +1,19 @@
 {
+    // Analysis stays on the firmware target so src/main.rs and src/net.rs keep
+    // full IntelliSense.
     "rust-analyzer.cargo.target": "thumbv8m.main-none-eabihf",
     "rust-analyzer.cargo.features": [],
-    "rust-analyzer.cargo.allTargets": false,
+    // Required for the Test Explorer: without it the [[test]] targets (host,
+    // integration) are excluded from the project model and no tests are found.
+    "rust-analyzer.cargo.allTargets": true,
     "rust-analyzer.check.command": "clippy",
     "rust-analyzer.check.extraArgs": ["--no-deps"],
     "rust-analyzer.check.workspace": false,
-    "rust-analyzer.server.path": "/usr/local/bin/rust-analyzer"
+    // ...but keep clippy off those test targets — cross-compiling them to
+    // thumbv8m fails (no std), which would flood the Problems panel.
+    "rust-analyzer.check.allTargets": false,
+    "rust-analyzer.server.path": "/usr/local/bin/rust-analyzer",
+    "rust-analyzer.testExplorer": true,
+    // Retargets `cargo test` runnables at the host triple. See the script header.
+    "rust-analyzer.runnables.command": "${workspaceFolder}/.vscode/cargo-host-test"
 }
