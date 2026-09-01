@@ -45,8 +45,7 @@ const DECODE_TABLE: [u8; 256] = {
 /// Panics if `output` is too small. Required size: `(input.len() / 3 + 1) * 4`.
 pub fn encode(input: &[u8], output: &mut [u8]) -> usize {
     let mut o = 0;
-    let chunks = input.chunks_exact(3);
-    let remainder = chunks.remainder();
+    let (chunks, remainder) = input.as_chunks::<3>();
 
     for chunk in chunks {
         let triple = u32::from(chunk[0]) << 16 | u32::from(chunk[1]) << 8 | u32::from(chunk[2]);
@@ -106,8 +105,7 @@ pub fn decode(input: &[u8], output: &mut [u8]) -> Result<usize, ()> {
     };
 
     let data = &input[..stripped];
-    let chunks = data.chunks_exact(4);
-    let remainder = chunks.remainder();
+    let (chunks, remainder) = data.as_chunks::<4>();
     let mut o = 0;
 
     for chunk in chunks {
