@@ -920,7 +920,7 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
         ConnectOptions, PublicationOptions, RetainHandling, SubscriptionOptions, TopicReference,
     };
     use rust_mqtt::config::{KeepAlive, SessionExpiryInterval};
-    use rust_mqtt::types::{MqttString, QoS, TopicName};
+    use rust_mqtt::types::{MqttString, TopicFilter, TopicName};
 
     if creds.mqtt_host.is_empty() {
         defmt::warn!("MQTT host is empty — MQTT transport disabled");
@@ -992,7 +992,10 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
         // Set up MQTT client with BumpBuffer (no-alloc)
         let mut buf_storage = [0u8; 1024];
         let mut buffer = BumpBuffer::new(&mut buf_storage);
-        let mut client: Client<'_, _, _, 1, 1, 1, 0> = Client::new(&mut buffer);
+        // Const generics: SUBSCRIBE_MAXIMUM, RECEIVE_MAXIMUM, SEND_MAXIMUM,
+        // MAX_SUBSCRIPTION_IDENTIFIERS, MAX_USER_PROPERTIES,
+        // MAX_INCOMING_TOPIC_ALIASES, MAX_OUTGOING_TOPIC_ALIASES
+        let mut client: Client<'_, '_, _, _, 1, 1, 1, 0, 0, 0, 0> = Client::new(&mut buffer);
 
         let connect_opts = ConnectOptions::new()
             .clean_start()
@@ -1027,18 +1030,13 @@ async fn mqtt_client(stack: Stack<'static>, creds: Credentials, config_ip: heapl
         unsafe { client.buffer_mut().reset() };
 
         // Subscribe to command topic
-        let cmd_topic = TopicName::new_unchecked(
+        let cmd_topic = TopicFilter::new_unchecked(
             MqttString::from_str(cmd_topic_str.as_str())
                 .expect("cmd topic exceeds MqttString limit"),
         );
-        let sub_opts = SubscriptionOptions {
-            retain_handling: RetainHandling::SendIfNotSubscribedBefore,
-            retain_as_published: false,
-            no_local: false,
-            qos: QoS::AtMostOnce,
-            subscription_identifier: None,
-        };
-        if let Err(e) = client.subscribe(cmd_topic.clone().into(), sub_opts).await {
+        let sub_opts =
+            SubscriptionOptions::new().retain_handling(RetainHandling::SendIfNotSubscribedBefore);
+        if let Err(e) = client.subscribe(cmd_topic, &sub_opts).await {
             defmt::warn!("MQTT SUBSCRIBE failed: {:?}", e);
             let secs = mqtt::backoff_secs(reconnect_attempt);
             LED_SIGNAL.signal(LedState::Reconnecting);
