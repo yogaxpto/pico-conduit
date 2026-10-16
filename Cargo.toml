@@ -48,7 +48,7 @@ required-features = ["embedded"]
 [dependencies]
 # JSON protocol (no_std, no heap)
 serde           = { version = "1.0", default-features = false, features = ["derive"] }
-serde-json-core = "0.6.0"
+serde-json-core = "0.7.0"
 
 # Fixed-capacity data structures (no heap)
 heapless = { version = "0.9.3", features = ["serde"] }
