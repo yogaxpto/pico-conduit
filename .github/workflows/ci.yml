@@ -3,16 +3,22 @@ name: CI
 on:
   push:
     branches: [master]
-    tags: ["v*"]
     paths-ignore:
       - '**.md'
   pull_request:
     branches: [master]
     paths-ignore:
       - '**.md'
+  # Called by cd.yml on version tags so the release is cut from a fully
+  # linted, tested, and size-checked build of the tagged commit.
+  workflow_call:
+    outputs:
+      deps-image:
+        description: "pico2w deps image (contains elf2uf2-rs)"
+        value: ${{ jobs.build-pico2w.outputs.image }}
 
 permissions:
-  contents: write
+  contents: read
   packages: write
 
 concurrency:
@@ -444,43 +450,3 @@ jobs:
           name: firmware-elf-${{ matrix.board }}
           path: ${{ env.CARGO_TARGET_DIR }}/${{ matrix.target }}/release/pico-conduit
           retention-days: 5
-
-  # ── Release (only on version tags) ─────────────────────────────────
-  # ELFs are produced by build-firmware (uploaded as GHA artifacts).
-  # elf2uf2-rs is installed in the deps Docker image (base-tools stage).
-  release:
-    name: Release UF2
-    needs: [build-pico2w, build-firmware]
-    if: github.ref_type == 'tag'
-    runs-on: ubuntu-latest
-    container:
-      image: ${{ needs.build-pico2w.outputs.image }}
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    permissions:
-      contents: write
-      packages: read
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: firmware-elf-pico2w
-          path: elf-pico2w
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: firmware-elf-pico1w
-          path: elf-pico1w
-
-      - name: Convert pico2w ELF to UF2
-        run: elf2uf2-rs elf-pico2w/pico-conduit pico-conduit-pico2w.uf2
-
-      - name: Convert pico1w ELF to UF2
-        run: elf2uf2-rs elf-pico1w/pico-conduit pico-conduit-pico1w.uf2
-
-      - name: Upload UF2s to GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          files: |
-            pico-conduit-pico2w.uf2
-            pico-conduit-pico1w.uf2
