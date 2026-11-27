@@ -128,7 +128,7 @@ dependencies = [
  "embedded-io 0.7.1",
  "embedded-io-async 0.7.0",
  "futures-intrusive",
- "heapless 0.9.3",
+ "heapless 0.8.0",
 ]
 
 [[package]]
@@ -309,7 +309,7 @@ dependencies = [
  "embedded-hal-async",
  "embedded-io-async 0.7.0",
  "futures",
- "heapless 0.9.3",
+ "heapless 0.9.4",
 ]
 
 [[package]]
@@ -540,7 +540,7 @@ dependencies = [
  "embassy-time",
  "embedded-io-async 0.7.0",
  "embedded-nal-async",
- "heapless 0.9.3",
+ "heapless 0.9.4",
  "managed",
  "smoltcp",
 ]
@@ -632,7 +632,7 @@ dependencies = [
  "embedded-io-async 0.7.0",
  "futures-core",
  "futures-sink",
- "heapless 0.9.3",
+ "heapless 0.9.4",
 ]
 
 [[package]]
@@ -977,9 +977,9 @@ dependencies = [
 
 [[package]]
 name = "heapless"
-version = "0.9.3"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25ba4bd83f9415b58b4ed8dc5714c76e626a105be4646c02630ad730ad3b5aa4"
+checksum = "411fdef4df93751117bd9ef8caa0e7f99c65dafec5bd84313eb8e2fdd75e32f2"
 dependencies = [
  "defmt 1.2.0",
  "hash32",
@@ -1296,7 +1296,7 @@ dependencies = [
  "embedded-io-async 0.7.0",
  "embedded-storage",
  "fixed",
- "heapless 0.9.3",
+ "heapless 0.9.4",
  "panic-probe",
  "pico-conduit-macros",
  "portable-atomic",
@@ -1544,7 +1544,7 @@ dependencies = [
  "const_fn",
  "defmt 1.2.0",
  "embedded-io-async 0.7.0",
- "heapless 0.9.3",
+ "heapless 0.9.4",
 ]
 
 [[package]]
@@ -1623,7 +1623,7 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d51e6795fbc00a1b26d78c7a0dbda143215d9dd0ee27c8a63ae0e1ccd6b83706"
 dependencies = [
- "heapless 0.9.3",
+ "heapless 0.9.4",
  "ryu",
  "serde",
 ]
@@ -1728,7 +1728,7 @@ dependencies = [
  "byteorder",
  "cfg-if",
  "defmt 0.3.100",
- "heapless 0.9.3",
+ "heapless 0.9.4",
  "managed",
 ]
 
